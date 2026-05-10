@@ -1,0 +1,11 @@
+.env
+.env.local
+.next
+.sixth
+.vscode
+dev*.err
+dev*.log
+node_modules
+sample.*
+test-image.png
+tests

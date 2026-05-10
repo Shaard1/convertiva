@@ -1,0 +1,164 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --background: #f6f7f2;
+  --background-rgb: 246, 247, 242;
+  --background-secondary: #e9f0e4;
+  --card: #ffffff;
+  --card-muted: #f8faf6;
+  --foreground: #2f3a2f;
+  --muted-foreground: #5b6257;
+  --border: #dde5d8;
+  --primary: #5f8b4c;
+  --primary-dark: #3e5f44;
+  --primary-soft: #a3b18a;
+  --success: #4f7a45;
+  --danger: #b42318;
+  --shadow: 0 20px 60px rgba(62, 95, 68, 0.08);
+  --font-sans:
+    "Segoe UI", "Inter", "Helvetica Neue", Arial, system-ui, -apple-system,
+    BlinkMacSystemFont, sans-serif;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #121a16;
+  --background-rgb: 18, 26, 22;
+  --background-secondary: #1b251f;
+  --card: #1e2a23;
+  --card-muted: #19231d;
+  --foreground: #f3f5f0;
+  --muted-foreground: #bac5b6;
+  --border: #334237;
+  --primary: #7ba26a;
+  --primary-dark: #5f8b4c;
+  --primary-soft: #a3b18a;
+  --success: #7ba26a;
+  --danger: #f97066;
+  --shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background:
+    radial-gradient(circle at 12% 8%, rgba(163, 177, 138, 0.18), transparent 27rem),
+    radial-gradient(circle at 86% 12%, rgba(95, 139, 76, 0.1), transparent 25rem),
+    linear-gradient(rgba(62, 95, 68, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(62, 95, 68, 0.02) 1px, transparent 1px),
+    var(--background);
+  background-attachment: fixed;
+  background-size: auto, auto, 42px 42px, 42px 42px, auto;
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+body::before {
+  pointer-events: none;
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    radial-gradient(circle at center, rgba(47, 58, 47, 0.045) 0 1px, transparent 1px);
+  background-size: 18px 18px;
+  opacity: 0.32;
+  mix-blend-mode: multiply;
+}
+
+.dark body::before {
+  opacity: 0.1;
+  mix-blend-mode: screen;
+}
+
+.dark body {
+  background:
+    radial-gradient(circle at 50% -8%, rgba(123, 162, 106, 0.1), transparent 26rem),
+    radial-gradient(circle at 12% 10%, rgba(95, 139, 76, 0.08), transparent 22rem),
+    radial-gradient(circle at 88% 14%, rgba(163, 177, 138, 0.045), transparent 23rem),
+    linear-gradient(rgba(163, 177, 138, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(163, 177, 138, 0.014) 1px, transparent 1px),
+    var(--background);
+  background-attachment: fixed;
+  background-size: auto, auto, auto, 42px 42px, 42px 42px, auto;
+}
+
+* {
+  border-color: var(--border);
+}
+
+::selection {
+  background: rgba(95, 139, 76, 0.2);
+}
+
+.card-shadow {
+  box-shadow: var(--shadow);
+}
+
+.page-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg, rgba(var(--background-rgb), 0.66), rgba(var(--background-rgb), 0.96) 22rem),
+    transparent;
+}
+
+.dark .page-shell {
+  background:
+    linear-gradient(180deg, rgba(var(--background-rgb), 0.3), rgba(var(--background-rgb), 0.92) 20rem),
+    transparent;
+}
+
+.soft-section {
+  position: relative;
+  border-top: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--background-secondary) 42%, transparent), transparent 70%),
+    transparent;
+}
+
+.converter-spotlight {
+  position: relative;
+}
+
+.converter-spotlight::before {
+  pointer-events: none;
+  content: "";
+  position: absolute;
+  inset: -3rem -2rem -2rem;
+  z-index: -1;
+  border-radius: 3rem;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(95, 139, 76, 0.14), transparent 64%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent);
+  filter: blur(2px);
+}
+
+.dark .converter-spotlight::before {
+  inset: -2rem -1.25rem -1.5rem;
+  border-radius: 2.5rem;
+  background:
+    radial-gradient(circle at 50% 10%, rgba(123, 162, 106, 0.1), transparent 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 65%);
+  filter: blur(1px);
+}
+
+.section-fade {
+  animation: section-fade 0.5s ease-out both;
+}
+
+@keyframes section-fade {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
