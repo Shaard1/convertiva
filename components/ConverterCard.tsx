@@ -880,8 +880,7 @@ export function ConverterCard() {
                       <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary)]" />
                       <p className="leading-6">
                         Files are processed temporarily. Guest downloads expire after 1 hour,
-                        and logged-in history keeps the last 20 conversions for 24 hours when
-                        Supabase Storage is configured.
+                        and logged-in history keeps the last 20 conversions for 24 hours.
                       </p>
                     </div>
                   </div>
