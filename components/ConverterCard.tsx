@@ -50,6 +50,8 @@ const initialState: ConverterState = {
   successMessage: null,
 };
 
+const CLIENT_CONVERSION_BATCH_SIZE = 5;
+
 function createUploadedFile(file: File): UploadedFile {
   return {
     id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
@@ -152,6 +154,16 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function chunkFiles(files: UploadedFile[], chunkSize: number) {
+  const chunks: UploadedFile[][] = [];
+
+  for (let index = 0; index < files.length; index += chunkSize) {
+    chunks.push(files.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
 function decodeHeaderFileName(value: string | null, fallbackName: string) {
   if (!value) {
     return fallbackName;
@@ -203,15 +215,24 @@ export function ConverterCard() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [progressItems, setProgressItems] = useState<ConversionProgressItem[]>([]);
 
-  function updateProgressStage(
+  function updateProgressStageForFiles(
+    files: UploadedFile[],
     stage: ConversionProgressItem["stage"],
     progress: number,
+    error: string | null = null,
   ) {
+    const fileIds = new Set(files.map((file) => file.id));
+
     setProgressItems((currentItems) =>
       currentItems.map((item) =>
-        item.stage === "done" || item.stage === "failed"
-          ? item
-          : { ...item, stage, progress },
+        fileIds.has(item.id)
+          ? {
+              ...item,
+              stage,
+              progress: Math.max(item.progress, progress),
+              error,
+            }
+          : item,
       ),
     );
   }
@@ -222,9 +243,16 @@ export function ConverterCard() {
     );
   }
 
-  function clearConvertedFiles() {
-    convertedFiles.forEach((file) => URL.revokeObjectURL(file.downloadUrl));
-    setConvertedFiles([]);
+  function handleRemoveConvertedFile(fileId: string) {
+    setConvertedFiles((currentFiles) => {
+      const fileToRemove = currentFiles.find((file) => file.id === fileId);
+
+      if (fileToRemove) {
+        URL.revokeObjectURL(fileToRemove.downloadUrl);
+      }
+
+      return currentFiles.filter((file) => file.id !== fileId);
+    });
   }
 
   function addFilesToHistory(files: ConvertedFile[]) {
@@ -416,7 +444,6 @@ export function ConverterCard() {
       return;
     }
 
-    clearConvertedFiles();
     clearProgress();
     setSelectedFiles((currentFiles) => {
       const nextFiles = [...currentFiles, ...validFiles];
@@ -431,7 +458,6 @@ export function ConverterCard() {
   }
 
   function handleRemoveFile(fileId: string) {
-    clearConvertedFiles();
     clearProgress();
     resetFeedback();
     setSelectedFiles((currentFiles) => {
@@ -465,25 +491,71 @@ export function ConverterCard() {
     syncFileStatuses(updatedUsage.remaining);
   }
 
-  async function finalizeProgress(results: ConvertedFile[]) {
-    setProgressItems((currentItems) =>
-      currentItems.map((item) => ({
-        ...item,
-        progress: Math.max(item.progress, 92),
-        stage: "finalizing",
-        error: null,
-      })),
-    );
-    await delay(180);
-    setProgressItems((currentItems) =>
-      currentItems.map((item) => ({
-        ...item,
-        progress: 100,
-        stage: results.some((result) => result.id === item.id) ? "done" : "failed",
-        error: results.some((result) => result.id === item.id)
-          ? null
-          : "Could not convert this image. Try another file.",
-      })),
+  async function convertFileBatch(
+    files: UploadedFile[],
+    outputFormat: OutputFormat,
+    retentionMs: number,
+    accessToken?: string,
+  ): Promise<ConvertedFile[]> {
+    const formData = new FormData();
+    formData.append("outputFormat", outputFormat);
+    files.forEach((file) => formData.append("files", file.file, file.name));
+
+    const response = await fetch("/api/convert", {
+      method: "POST",
+      body: formData,
+      headers: accessToken
+        ? {
+            Authorization: `Bearer ${accessToken}`,
+          }
+        : undefined,
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => null)) as unknown;
+      throw new Error(
+        parseConversionError(
+          payload,
+          "Something went wrong while converting. Please try again.",
+        ),
+      );
+    }
+
+    const responseBlob = await response.blob();
+
+    if (files.length === 1) {
+      const fileName = decodeHeaderFileName(
+        response.headers.get("x-converted-file-name"),
+        `${files[0].name}.${outputFormat}`,
+      );
+      const mimeType = response.headers.get("content-type") ?? responseBlob.type;
+
+      return [
+        createConvertedFile(
+          fileName,
+          mimeType,
+          responseBlob,
+          files[0].id,
+          retentionMs,
+        ),
+      ];
+    }
+
+    const zip = await JSZip.loadAsync(responseBlob);
+    const zipEntries = Object.values(zip.files).filter((entry) => !entry.dir);
+
+    return Promise.all(
+      zipEntries.map(async (entry, index) => {
+        const blob = await entry.async("blob");
+
+        return createConvertedFile(
+          entry.name,
+          blob.type || "application/octet-stream",
+          blob,
+          files[index]?.id ?? `${entry.name}-${crypto.randomUUID()}`,
+          retentionMs,
+        );
+      }),
     );
   }
 
@@ -549,7 +621,6 @@ export function ConverterCard() {
       return;
     }
 
-    clearConvertedFiles();
     setProgressItems(createProgressItems(readyFiles, outputFormat));
     setState({
       isConverting: true,
@@ -557,80 +628,47 @@ export function ConverterCard() {
       successMessage: null,
     });
 
-    const formData = new FormData();
-    formData.append("outputFormat", outputFormat);
-    readyFiles.forEach((file) => formData.append("files", file.file, file.name));
-
     try {
-      updateProgressStage("uploading", 25);
       const supabase = getSupabaseBrowserClient();
       const sessionResult = user && supabase
         ? await supabase.auth.getSession()
         : null;
       const accessToken = sessionResult?.data.session?.access_token;
+      const conversionBatches = chunkFiles(readyFiles, CLIENT_CONVERSION_BATCH_SIZE);
+      const results: ConvertedFile[] = [];
+      let firstError: string | null = null;
 
-      updateProgressStage("converting", 65);
-      const response = await fetch("/api/convert", {
-        method: "POST",
-        body: formData,
-        headers: accessToken
-          ? {
-              Authorization: `Bearer ${accessToken}`,
-            }
-          : undefined,
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as unknown;
-        throw new Error(
-          parseConversionError(
-            payload,
-            "Something went wrong while converting. Please try again.",
-          ),
-        );
-      }
-
-      updateProgressStage("finalizing", 90);
-      const responseBlob = await response.blob();
-      let results: ConvertedFile[];
-
-      if (readyFiles.length === 1) {
-        const fileName = decodeHeaderFileName(
-          response.headers.get("x-converted-file-name"),
-          `${readyFiles[0].name}.${outputFormat}`,
-        );
-        const mimeType = response.headers.get("content-type") ?? responseBlob.type;
-        results = [
-          createConvertedFile(
-            fileName,
-            mimeType,
-            responseBlob,
-            readyFiles[0].id,
+      for (const batch of conversionBatches) {
+        try {
+          updateProgressStageForFiles(batch, "uploading", 25);
+          updateProgressStageForFiles(batch, "converting", 65);
+          const batchResults = await convertFileBatch(
+            batch,
+            outputFormat,
             activePolicy.retentionMs,
-          ),
-        ];
-      } else {
-        const zip = await JSZip.loadAsync(responseBlob);
-        const zipEntries = Object.values(zip.files).filter((entry) => !entry.dir);
-        const blobs = await Promise.all(
-          zipEntries.map(async (entry, index) => {
-            const blob = await entry.async("blob");
-            return createConvertedFile(
-              entry.name,
-              blob.type || "application/octet-stream",
-              blob,
-              readyFiles[index]?.id ?? `${entry.name}-${crypto.randomUUID()}`,
-              activePolicy.retentionMs,
-            );
-          }),
-        );
-        results = blobs;
+            accessToken,
+          );
+          updateProgressStageForFiles(batch, "finalizing", 90);
+          await delay(120);
+          results.push(...batchResults);
+          updateProgressStageForFiles(batch, "done", 100);
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Something went wrong while converting. Please try again.";
+          firstError ??= message;
+          updateProgressStageForFiles(batch, "failed", 100, message);
+        }
       }
 
-      await finalizeProgress(results);
-      setConvertedFiles(results);
-      addFilesToHistory(results);
-      if (user) {
+      setConvertedFiles((currentFiles) => [...results, ...currentFiles]);
+
+      if (results.length) {
+        addFilesToHistory(results);
+      }
+
+      if (user && results.length) {
         const historyResult = await saveAuthenticatedConversionHistory(
           user,
           results,
@@ -643,12 +681,27 @@ export function ConverterCard() {
           );
         }
       }
-      await refreshUsageAfterSuccess(results.length);
+
+      if (results.length) {
+        await refreshUsageAfterSuccess(results.length);
+      }
+
+      const failedCount = readyFiles.length - results.length;
+      const hasFailures = failedCount > 0;
+
       setState({
         isConverting: false,
-        error: null,
+        error: hasFailures
+          ? firstError ?? "Some images could not be converted. You can remove them or try again."
+          : null,
         successMessage:
-          results.length === 1 ? "Your image is ready." : "All images are ready.",
+          results.length === 0
+            ? null
+            : hasFailures
+              ? `${results.length} of ${readyFiles.length} images are ready.`
+              : results.length === 1
+                ? "Your image is ready."
+                : "All images are ready.",
       });
     } catch (error) {
       const message =
@@ -728,8 +781,11 @@ export function ConverterCard() {
     overLimitCount > 0 ||
     overBatchLimit;
   const hasSelectedFiles = selectedFiles.length > 0;
+  const hasFailedProgress = progressItems.some((item) => item.stage === "failed");
   const showProgressList =
-    state.isConverting || (progressItems.length > 0 && convertedFiles.length === 0);
+    state.isConverting ||
+    hasFailedProgress ||
+    (progressItems.length > 0 && convertedFiles.length === 0);
   const exceedsLimitMessage =
     overLimitCount > 0 && usage
       ? `${overLimitCount} selected image${overLimitCount === 1 ? "" : "s"} exceed your remaining daily limit. Remove the highlighted file${overLimitCount === 1 ? "" : "s"} or sign in for more room.`
@@ -802,6 +858,7 @@ export function ConverterCard() {
                     {showProgressList ? (
                       <ConversionProgressList
                         items={progressItems}
+                        onRemove={handleRemoveFile}
                         onDownload={convertedFiles.length ? handleDownloadSingle : undefined}
                       />
                     ) : (
@@ -905,8 +962,8 @@ export function ConverterCard() {
                   {state.successMessage && convertedFiles.length ? (
                     <BatchResultList
                       files={convertedFiles}
-                      outputFormat={outputFormat}
                       onDownloadAll={handleDownloadAll}
+                      onRemove={handleRemoveConvertedFile}
                       retentionLabel={
                         user
                           ? "Downloads expire after 24 hours."

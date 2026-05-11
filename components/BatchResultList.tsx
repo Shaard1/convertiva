@@ -1,18 +1,18 @@
-import { CheckCircle2, Download, Files } from "lucide-react";
+import { CheckCircle2, Download, Files, X } from "lucide-react";
 import { formatFileSize } from "@/lib/format";
 import { ConvertedFile } from "@/types/converter";
 
 type BatchResultListProps = {
   files: ConvertedFile[];
-  outputFormat: string;
   onDownloadAll: () => void;
+  onRemove: (fileId: string) => void;
   retentionLabel: string;
 };
 
 export function BatchResultList({
   files,
-  outputFormat,
   onDownloadAll,
+  onRemove,
   retentionLabel,
 }: BatchResultListProps) {
   if (!files.length) {
@@ -31,7 +31,7 @@ export function BatchResultList({
           <div>
           <p className="text-lg font-semibold text-[var(--foreground)]">{heading}</p>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            Converted to {outputFormat.toUpperCase()} format.
+            Ready to download. New conversions will be added here.
           </p>
           <p className="mt-1 text-xs text-[var(--muted-foreground)]">
             {retentionLabel}
@@ -64,14 +64,25 @@ export function BatchResultList({
                 {formatFileSize(file.size)}
               </p>
             </div>
-            <a
-              href={file.downloadUrl}
-              download={file.fileName}
-              className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3E5F44] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2F4A35]"
-            >
-              <Download className="h-4 w-4" />
-              Download
-            </a>
+            <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
+              <a
+                href={file.downloadUrl}
+                download={file.fileName}
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3E5F44] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2F4A35]"
+              >
+                <Download className="h-4 w-4" />
+                Download
+              </a>
+              <button
+                type="button"
+                onClick={() => onRemove(file.id)}
+                aria-label={`Remove ${file.fileName} from downloads`}
+                className="inline-flex items-center justify-center gap-2 rounded-full border bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[var(--muted-foreground)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
+              >
+                <X className="h-4 w-4" />
+                Remove
+              </button>
+            </div>
           </div>
         ))}
       </div>

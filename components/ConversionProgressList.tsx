@@ -82,7 +82,7 @@ export function ConversionProgressList({
                 </div>
 
                 <div className="flex gap-2 sm:shrink-0">
-                  {!isDone && !isFailed && onRemove ? (
+                  {!isDone && onRemove ? (
                     <button
                       type="button"
                       onClick={() => onRemove(item.id)}
