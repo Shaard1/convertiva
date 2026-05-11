@@ -163,3 +163,45 @@ using (
   bucket_id = 'converted-images'
   and (storage.foldername(name))[1] = auth.uid()::text
 );
+
+create table if not exists public.conversion_platform_jobs (
+  id text primary key,
+  status text not null check (status in ('queued', 'processing', 'finished', 'failed')),
+  task_payload jsonb not null default '{}'::jsonb,
+  error text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  expires_at timestamptz not null
+);
+
+alter table public.conversion_platform_jobs
+add column if not exists task_payload jsonb not null default '{}'::jsonb;
+
+alter table public.conversion_platform_jobs enable row level security;
+
+create table if not exists public.conversion_platform_files (
+  id uuid primary key default gen_random_uuid(),
+  job_id text not null references public.conversion_platform_jobs(id) on delete cascade,
+  role text not null check (role in ('input', 'output')),
+  file_name text not null,
+  mime_type text not null,
+  size_bytes int not null,
+  storage_path text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.conversion_platform_files enable row level security;
+
+create index if not exists conversion_platform_files_job_idx
+on public.conversion_platform_files (job_id, role);
+
+create index if not exists conversion_platform_jobs_expires_idx
+on public.conversion_platform_jobs (expires_at);
+
+-- The v1 platform API writes these tables with SUPABASE_SERVICE_ROLE_KEY.
+-- Client reads should go through API routes, not direct table policies.
+
+insert into storage.buckets (id, name, public)
+values ('conversion-platform-files', 'conversion-platform-files', false)
+on conflict (id) do update
+set public = excluded.public;

@@ -24,6 +24,7 @@ Convertly Image is a minimal image converter web app that lets users upload AVIF
 - Sharp
 - Supabase Auth
 - Supabase Database
+- Supabase Storage
 - JSZip
 
 ## Installation
@@ -35,13 +36,13 @@ npm install
 ## Requirements
 
 - Node.js 18.18 or newer
-- A Supabase project if you want auth and logged-in usage tracking
+- A Supabase project if you want auth, logged-in usage tracking, persistent platform jobs, and stored outputs
 
 ## Run Locally
 
 1. Copy `.env.example` to `.env.local`.
 2. Add your Supabase values.
-3. Create the `conversion_usage` table and policies in Supabase.
+3. Run `supabase/setup.sql` in the Supabase SQL Editor.
 4. Start the development server.
 
 ```bash
@@ -55,9 +56,16 @@ Then open `http://localhost:3000`.
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+CONVERSION_PROCESSING_MODE=inline
+CONVERSION_WORKER_SECRET=
 ```
 
 If these values are missing, the app still works in guest mode and auth buttons stay connected to a safe fallback message.
+
+`SUPABASE_SERVICE_ROLE_KEY` is server-only. It is used by the v1 platform API to persist job metadata and upload converted outputs to private storage. Never expose it in browser code or commit real values.
+
+`CONVERSION_PROCESSING_MODE` can be `inline` or `queued`. Use `inline` for local development and `queued` when a worker is calling `POST /api/v1/workers/process`. Set `CONVERSION_WORKER_SECRET` in production and send it as either `Authorization: Bearer <secret>` or `X-Worker-Secret: <secret>`.
 
 ## Auth Setup
 
@@ -107,105 +115,28 @@ If these values are missing, the app still works in guest mode and auth buttons 
 
 ## Supabase Setup
 
-Create the table:
+The full setup script lives in `supabase/setup.sql`. It creates:
 
-```sql
-create table conversion_usage (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade,
-  date date not null,
-  conversions_used int not null default 0,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  unique(user_id, date)
-);
-```
+- `conversion_usage`
+- `guest_conversion_usage`
+- `conversion_history`
+- `conversion_platform_jobs`
+- `conversion_platform_files`
+- private `converted-images` bucket
+- private `conversion-platform-files` bucket
 
-Enable RLS:
-
-```sql
-alter table conversion_usage enable row level security;
-```
-
-Add policies:
-
-```sql
-create policy "Users can read their own usage"
-on conversion_usage
-for select
-to authenticated
-using (auth.uid() = user_id);
-
-create policy "Users can insert their own usage"
-on conversion_usage
-for insert
-to authenticated
-with check (auth.uid() = user_id);
-
-create policy "Users can update their own usage"
-on conversion_usage
-for update
-to authenticated
-using (auth.uid() = user_id)
-with check (auth.uid() = user_id);
-```
-
-Create persistent guest usage table:
-
-```sql
-create table guest_conversion_usage (
-  id uuid primary key default gen_random_uuid(),
-  guest_key text not null,
-  date date not null,
-  conversions_used int not null default 0,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  unique(guest_key, date)
-);
-```
-
-Create logged-in conversion history table:
-
-```sql
-create table conversion_history (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users(id) on delete cascade,
-  file_name text not null,
-  mime_type text not null,
-  size_bytes int not null,
-  output_format text not null,
-  storage_path text not null,
-  converted_at timestamptz not null,
-  expires_at timestamptz not null,
-  created_at timestamptz default now()
-);
-```
-
-Enable RLS and history policies:
-
-```sql
-alter table conversion_history enable row level security;
-
-create policy "Users can read their own conversion history"
-on conversion_history
-for select
-to authenticated
-using (auth.uid() = user_id);
-
-create policy "Users can insert their own conversion history"
-on conversion_history
-for insert
-to authenticated
-with check (auth.uid() = user_id);
-```
-
-Create a private Supabase Storage bucket named `converted-images`. Add storage policies that allow authenticated users to upload and read objects inside their own user-id folder.
+The existing web app uses the usage and history tables. The v1 platform API uses `conversion_platform_jobs`, `conversion_platform_files`, and `conversion-platform-files` when `SUPABASE_SERVICE_ROLE_KEY` is configured.
 
 ## Folder Structure
 
 ```text
 app/
   api/convert/route.ts
+  api/v1/jobs/route.ts
+  api/v1/jobs/[jobId]/route.ts
+  api/v1/jobs/[jobId]/download/route.ts
+  api/v1/operations/route.ts
+  api/v1/workers/process/route.ts
   globals.css
   layout.tsx
   page.tsx
@@ -228,14 +159,18 @@ components/
 lib/
   auth.ts
   constants.ts
+  conversion-engines.ts
   conversion-history.ts
+  conversion-jobs.ts
   file.ts
   format.ts
   supabase.ts
+  supabase-server.ts
   usage.ts
   zip.ts
 types/
   auth.ts
+  conversion-platform.ts
   converter.ts
   usage.ts
 ```
@@ -249,6 +184,68 @@ types/
 5. The API returns a binary image for single conversions or a ZIP for batch conversions.
 6. The frontend creates download links from the returned blobs.
 7. Usage is only incremented after successful conversions.
+
+## Conversion Platform API
+
+The app also includes a first version of a job-oriented conversion API. This is the foundation for a CloudConvert-style platform where requests create jobs, jobs are processed by conversion engines, and outputs are downloaded separately.
+
+Current v1 endpoints:
+
+```text
+GET  /api/v1/operations
+POST /api/v1/jobs
+GET  /api/v1/jobs/:jobId
+GET  /api/v1/jobs/:jobId/download
+POST /api/v1/workers/process
+```
+
+Create a conversion job with multipart form data:
+
+```text
+job=<JSON payload>
+files=<one or more uploaded files>
+```
+
+Example `job` payload:
+
+```json
+{
+  "tasks": {
+    "convert-main": {
+      "operation": "convert",
+      "output_format": "webp",
+      "engine": "sharp",
+      "options": {
+        "quality": 90,
+        "keepMetadata": false,
+        "backgroundColor": "#ffffff"
+      }
+    }
+  }
+}
+```
+
+The platform API supports two processing modes:
+
+```text
+inline: POST /api/v1/jobs stores the job, processes it immediately, and returns a finished or failed job.
+queued: POST /api/v1/jobs stores the job and input files, returns a queued job, and waits for a worker.
+```
+
+In queued mode, call `POST /api/v1/workers/process` from a scheduler, background process, or hosted worker. The worker claims the oldest queued job, downloads stored inputs, runs the configured engine, stores outputs, and updates the job status.
+
+With `SUPABASE_SERVICE_ROLE_KEY` configured, job metadata and task payloads are persisted in Supabase, input and output files are stored in the private `conversion-platform-files` bucket, and downloads continue to work across server restarts. Without Supabase admin credentials, jobs fall back to in-memory storage for local development.
+
+Planned engine expansion:
+
+```text
+Images: sharp, ImageMagick
+Video/audio: ffmpeg
+Documents: LibreOffice headless
+PDF: poppler, qpdf, Ghostscript
+Archives: 7zip
+Web capture: Playwright/Chromium
+```
 
 ## Testing Checklist
 
@@ -279,11 +276,13 @@ types/
 
 - Crop images
 - PDF conversion
-- Supabase Storage
 - User dashboard
 - Paid plans
+- API keys
+- Webhooks
 
 ## Known Limitations
 
+- The v1 worker processes one queued job per request. For higher throughput, run multiple scheduled worker calls or move execution to a dedicated worker service.
 - Guest usage has a browser counter plus an in-memory server guard. For multi-instance production deployments, move guest usage and rate limits to shared storage such as Redis or a database.
 - Conversion history uses browser session blobs, so downloads are available while the current app session is open.
