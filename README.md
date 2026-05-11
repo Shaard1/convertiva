@@ -59,6 +59,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 CONVERSION_PROCESSING_MODE=inline
 CONVERSION_WORKER_SECRET=
+CONVERSION_API_KEYS_REQUIRED=false
 ```
 
 If these values are missing, the app still works in guest mode and auth buttons stay connected to a safe fallback message.
@@ -66,6 +67,8 @@ If these values are missing, the app still works in guest mode and auth buttons 
 `SUPABASE_SERVICE_ROLE_KEY` is server-only. It is used by the v1 platform API to persist job metadata and upload converted outputs to private storage. Never expose it in browser code or commit real values.
 
 `CONVERSION_PROCESSING_MODE` can be `inline` or `queued`. Use `inline` for local development and `queued` when a worker is calling `POST /api/v1/workers/process`. Set `CONVERSION_WORKER_SECRET` in production and send it as either `Authorization: Bearer <secret>` or `X-Worker-Secret: <secret>`.
+
+`CONVERSION_API_KEYS_REQUIRED` controls whether v1 platform endpoints require `Authorization: Bearer cvt_live_...`. It defaults to required in production and optional outside production. Set it explicitly for deployments.
 
 ## Auth Setup
 
@@ -120,18 +123,21 @@ The full setup script lives in `supabase/setup.sql`. It creates:
 - `conversion_usage`
 - `guest_conversion_usage`
 - `conversion_history`
+- `conversion_api_keys`
 - `conversion_platform_jobs`
 - `conversion_platform_files`
+- `conversion_usage_events`
 - private `converted-images` bucket
 - private `conversion-platform-files` bucket
 
-The existing web app uses the usage and history tables. The v1 platform API uses `conversion_platform_jobs`, `conversion_platform_files`, and `conversion-platform-files` when `SUPABASE_SERVICE_ROLE_KEY` is configured.
+The existing web app uses the usage and history tables. The v1 platform API uses `conversion_api_keys`, `conversion_platform_jobs`, `conversion_platform_files`, `conversion_usage_events`, and `conversion-platform-files` when `SUPABASE_SERVICE_ROLE_KEY` is configured.
 
 ## Folder Structure
 
 ```text
 app/
   api/convert/route.ts
+  api/v1/api-keys/route.ts
   api/v1/jobs/route.ts
   api/v1/jobs/[jobId]/route.ts
   api/v1/jobs/[jobId]/download/route.ts
@@ -157,6 +163,7 @@ components/
   UploadBox.tsx
   UsageBadge.tsx
 lib/
+  api-keys.ts
   auth.ts
   constants.ts
   conversion-engines.ts
@@ -193,15 +200,33 @@ Current v1 endpoints:
 
 ```text
 GET  /api/v1/operations
+POST /api/v1/api-keys
 POST /api/v1/jobs
 GET  /api/v1/jobs/:jobId
 GET  /api/v1/jobs/:jobId/download
 POST /api/v1/workers/process
 ```
 
+Create an API key with a logged-in Supabase access token:
+
+```text
+POST /api/v1/api-keys
+Authorization: Bearer <supabase-access-token>
+Content-Type: application/json
+```
+
+```json
+{
+  "name": "Production key"
+}
+```
+
+The response includes the raw `cvt_live_...` key once. Store it securely.
+
 Create a conversion job with multipart form data:
 
 ```text
+Authorization: Bearer cvt_live_xxxxx
 job=<JSON payload>
 files=<one or more uploaded files>
 ```
@@ -234,7 +259,7 @@ queued: POST /api/v1/jobs stores the job and input files, returns a queued job, 
 
 In queued mode, call `POST /api/v1/workers/process` from a scheduler, background process, or hosted worker. The worker claims the oldest queued job, downloads stored inputs, runs the configured engine, stores outputs, and updates the job status.
 
-With `SUPABASE_SERVICE_ROLE_KEY` configured, job metadata and task payloads are persisted in Supabase, input and output files are stored in the private `conversion-platform-files` bucket, and downloads continue to work across server restarts. Without Supabase admin credentials, jobs fall back to in-memory storage for local development.
+With `SUPABASE_SERVICE_ROLE_KEY` configured, job metadata and task payloads are persisted in Supabase, input and output files are stored in the private `conversion-platform-files` bucket, completed jobs write usage events, and downloads continue to work across server restarts. Without Supabase admin credentials, jobs fall back to in-memory storage for local development.
 
 Planned engine expansion:
 

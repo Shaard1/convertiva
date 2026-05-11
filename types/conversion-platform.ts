@@ -30,6 +30,12 @@ export type ConversionJobRequest = {
 
 export type ConversionProcessingMode = "inline" | "queued";
 
+export type ConversionApiIdentity = {
+  type: "api_key" | "development";
+  userId: string | null;
+  apiKeyId: string | null;
+};
+
 export type ConversionJobFile = {
   id: string;
   fileName: string;

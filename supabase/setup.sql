@@ -168,6 +168,8 @@ create table if not exists public.conversion_platform_jobs (
   id text primary key,
   status text not null check (status in ('queued', 'processing', 'finished', 'failed')),
   task_payload jsonb not null default '{}'::jsonb,
+  user_id uuid references auth.users(id) on delete set null,
+  api_key_id uuid,
   error text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -177,7 +179,37 @@ create table if not exists public.conversion_platform_jobs (
 alter table public.conversion_platform_jobs
 add column if not exists task_payload jsonb not null default '{}'::jsonb;
 
+alter table public.conversion_platform_jobs
+add column if not exists user_id uuid references auth.users(id) on delete set null;
+
+alter table public.conversion_platform_jobs
+add column if not exists api_key_id uuid;
+
 alter table public.conversion_platform_jobs enable row level security;
+
+create table if not exists public.conversion_api_keys (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade,
+  name text not null,
+  key_hash text not null unique,
+  key_prefix text not null,
+  is_active boolean not null default true,
+  last_used_at timestamptz,
+  expires_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.conversion_api_keys enable row level security;
+
+alter table public.conversion_platform_jobs
+drop constraint if exists conversion_platform_jobs_api_key_id_fkey;
+
+alter table public.conversion_platform_jobs
+add constraint conversion_platform_jobs_api_key_id_fkey
+foreign key (api_key_id)
+references public.conversion_api_keys(id)
+on delete set null;
 
 create table if not exists public.conversion_platform_files (
   id uuid primary key default gen_random_uuid(),
@@ -197,6 +229,27 @@ on public.conversion_platform_files (job_id, role);
 
 create index if not exists conversion_platform_jobs_expires_idx
 on public.conversion_platform_jobs (expires_at);
+
+create index if not exists conversion_platform_jobs_api_key_idx
+on public.conversion_platform_jobs (api_key_id, created_at desc);
+
+create index if not exists conversion_api_keys_user_idx
+on public.conversion_api_keys (user_id, created_at desc);
+
+create table if not exists public.conversion_usage_events (
+  id uuid primary key default gen_random_uuid(),
+  api_key_id uuid references public.conversion_api_keys(id) on delete set null,
+  user_id uuid references auth.users(id) on delete set null,
+  job_id text references public.conversion_platform_jobs(id) on delete set null,
+  event_type text not null,
+  conversion_count int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table public.conversion_usage_events enable row level security;
+
+create index if not exists conversion_usage_events_api_key_idx
+on public.conversion_usage_events (api_key_id, created_at desc);
 
 -- The v1 platform API writes these tables with SUPABASE_SERVICE_ROLE_KEY.
 -- Client reads should go through API routes, not direct table policies.

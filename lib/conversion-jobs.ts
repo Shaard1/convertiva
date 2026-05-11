@@ -4,6 +4,7 @@ import { getOutputMimeType } from "@/lib/format";
 import { getSupabaseAdminClient } from "@/lib/supabase-server";
 import { OutputFormat, OutputOptions } from "@/types/converter";
 import {
+  ConversionApiIdentity,
   ConversionJobRecord,
   ConversionJobRequest,
   ConversionProcessingMode,
@@ -21,6 +22,8 @@ const DEFAULT_OUTPUT_OPTIONS: OutputOptions = {
 };
 
 type StoredConversionJob = Omit<ConversionJobRecord, "inputFiles" | "outputFiles"> & {
+  userId: string | null;
+  apiKeyId: string | null;
   convertTask: ConversionTaskRequest;
   inputUploads: File[];
   inputFiles: StoredConversionJobFile[];
@@ -38,6 +41,8 @@ type JobRow = {
   expires_at: string;
   error: string | null;
   task_payload: unknown;
+  user_id: string | null;
+  api_key_id: string | null;
 };
 
 type JobFileRow = {
@@ -154,6 +159,7 @@ function validateFiles(files: File[]) {
 function createJob(
   files: File[],
   convertTask: ConversionTaskRequest,
+  identity: ConversionApiIdentity,
 ): StoredConversionJob {
   const timestamp = nowIso();
   const job: StoredConversionJob = {
@@ -162,6 +168,8 @@ function createJob(
     createdAt: timestamp,
     updatedAt: timestamp,
     expiresAt: getExpiresAt(),
+    userId: identity.userId,
+    apiKeyId: identity.apiKeyId,
     convertTask,
     inputUploads: files,
     inputFiles: files.map((file) => ({
@@ -214,6 +222,8 @@ function mapJobRow(row: JobRow, files: JobFileRow[]): StoredConversionJob {
     updatedAt: row.updated_at,
     expiresAt: row.expires_at,
     error: row.error,
+    userId: row.user_id,
+    apiKeyId: row.api_key_id,
     convertTask: row.task_payload,
     inputUploads: [],
     inputFiles: files.filter((file) => file.role === "input").map(mapFileRow),
@@ -247,6 +257,8 @@ async function persistJob(job: StoredConversionJob) {
     expires_at: job.expiresAt,
     error: job.error,
     task_payload: job.convertTask,
+    user_id: job.userId,
+    api_key_id: job.apiKeyId,
   });
 
   if (job.inputFiles.length) {
@@ -277,6 +289,8 @@ async function persistJobStatus(job: StoredConversionJob) {
       status: job.status,
       updated_at: job.updatedAt,
       error: job.error,
+      user_id: job.userId,
+      api_key_id: job.apiKeyId,
     })
     .eq("id", job.id);
 }
@@ -299,6 +313,22 @@ async function persistOutputFiles(job: StoredConversionJob) {
       storage_path: file.storagePath,
     })),
   );
+}
+
+async function recordUsageEvent(job: StoredConversionJob) {
+  const supabase = getSupabaseAdminClient();
+
+  if (!supabase || !job.apiKeyId || !job.outputFiles.length) {
+    return;
+  }
+
+  await supabase.from("conversion_usage_events").insert({
+    api_key_id: job.apiKeyId,
+    user_id: job.userId,
+    job_id: job.id,
+    event_type: "conversion_completed",
+    conversion_count: job.outputFiles.length,
+  });
 }
 
 async function persistInputFiles(job: StoredConversionJob) {
@@ -386,7 +416,7 @@ async function loadStoredJob(jobId: string) {
 
   const { data: jobRow, error: jobError } = await supabase
     .from("conversion_platform_jobs")
-    .select("id,status,created_at,updated_at,expires_at,error,task_payload")
+    .select("id,status,created_at,updated_at,expires_at,error,task_payload,user_id,api_key_id")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -491,7 +521,30 @@ export function serializeJob(job: ConversionJobRecord) {
   };
 }
 
-export async function createConversionJob(formData: FormData) {
+function canAccessJob(job: StoredConversionJob, identity?: ConversionApiIdentity) {
+  if (!identity || identity.type === "development") {
+    return true;
+  }
+
+  return (
+    Boolean(job.apiKeyId && job.apiKeyId === identity.apiKeyId) ||
+    Boolean(job.userId && job.userId === identity.userId)
+  );
+}
+
+function assertCanAccessJob(
+  job: StoredConversionJob,
+  identity?: ConversionApiIdentity,
+) {
+  if (!canAccessJob(job, identity)) {
+    throw new ConversionJobError("Conversion job was not found.", 404);
+  }
+}
+
+export async function createConversionJob(
+  formData: FormData,
+  identity: ConversionApiIdentity,
+) {
   const jobRequest = parseJobPayload(formData.get("job"));
   const convertTask = getConvertTask(jobRequest);
 
@@ -508,7 +561,7 @@ export async function createConversionJob(formData: FormData) {
     throw new ConversionJobError("Requested conversion engine is not available.");
   }
 
-  const job = createJob(files, convertTask);
+  const job = createJob(files, convertTask, identity);
   await uploadInputs(job);
   await persistJob(job);
   await persistInputFiles(job);
@@ -520,18 +573,28 @@ export async function createConversionJob(formData: FormData) {
   return toPublicJob(job);
 }
 
-export async function getConversionJob(jobId: string) {
+export async function getConversionJob(
+  jobId: string,
+  identity?: ConversionApiIdentity,
+) {
   const job = conversionJobs.get(jobId);
   const storedJob = job ?? await loadStoredJob(jobId);
+
+  if (storedJob) {
+    assertCanAccessJob(storedJob, identity);
+  }
+
   return storedJob ? toPublicJob(storedJob) : null;
 }
 
 export async function getConversionJobOutputs(
   jobId: string,
+  identity?: ConversionApiIdentity,
 ): Promise<StoredConversionOutput[] | null> {
   const job = conversionJobs.get(jobId);
 
   if (job?.status === "finished") {
+    assertCanAccessJob(job, identity);
     return job.outputs;
   }
 
@@ -540,6 +603,8 @@ export async function getConversionJobOutputs(
   if (!storedJob || storedJob.status !== "finished") {
     return null;
   }
+
+  assertCanAccessJob(storedJob, identity);
 
   const outputs = await Promise.all(
     storedJob.outputFiles.map((file) => downloadStoredOutput(file)),
@@ -617,6 +682,7 @@ export async function processConversionJob(jobId: string) {
     job.updatedAt = nowIso();
     await persistOutputFiles(job);
     await persistJobStatus(job);
+    await recordUsageEvent(job);
   } catch (error) {
     job.status = "failed";
     job.error = error instanceof Error ? error.message : "Conversion failed.";
