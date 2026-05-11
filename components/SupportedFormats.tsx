@@ -16,7 +16,7 @@ const supportedFormats = [
 
 export function SupportedFormats() {
   return (
-    <section id="formats" className="soft-section section-fade py-20">
+    <section id="formats" className="soft-section section-fade py-16 sm:py-20">
       <div className="mx-auto max-w-5xl px-6">
         <SectionHeading
           badge="Formats"
@@ -24,7 +24,7 @@ export function SupportedFormats() {
           description="Convertly Image accepts the formats below for upload and conversion."
         />
 
-        <div className="mx-auto mt-12 rounded-[2rem] border bg-[var(--card)] p-6 sm:p-8">
+        <div className="mx-auto mt-10 rounded-[1.5rem] border bg-[var(--card)] p-5 sm:p-7">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-3">
               <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--background-secondary)] text-[var(--primary)]">
@@ -32,20 +32,20 @@ export function SupportedFormats() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-[var(--foreground)]">
-                  Ready to convert
+                  Common image types are ready
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">
-                  These formats are accepted by the current upload and conversion flow.
+                  Upload any of these formats, then choose the format you want back.
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
             {supportedFormats.map((format) => (
               <div
                 key={format}
-                className="rounded-2xl border border-[var(--primary)]/18 bg-[color-mix(in_srgb,var(--background-secondary)_72%,var(--card))] px-4 py-3 text-center text-sm font-semibold text-[var(--primary-dark)] dark:text-[var(--foreground)]"
+                className="rounded-xl border border-[var(--primary)]/18 bg-[color-mix(in_srgb,var(--background-secondary)_72%,var(--card))] px-4 py-3 text-center text-sm font-semibold text-[var(--primary-dark)] dark:text-[var(--foreground)]"
               >
                 {format}
               </div>

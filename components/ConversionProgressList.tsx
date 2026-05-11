@@ -39,7 +39,7 @@ export function ConversionProgressList({
   const activeCount = items.length - finishedCount - failedCount;
 
   return (
-    <div className="rounded-3xl border bg-[var(--card-muted)] p-5">
+    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-base font-semibold text-[var(--foreground)]">
@@ -73,10 +73,10 @@ export function ConversionProgressList({
                       {item.fileName}
                     </p>
                     <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-                      {formatFileSize(item.fileSize)} - {item.originalFormat} Image
+                      {formatFileSize(item.fileSize)} - {item.originalFormat}
                     </p>
-                    <p className="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-[var(--primary)]">
-                      Convert {item.originalFormat} -&gt; {item.outputFormat.toUpperCase()}
+                    <p className="mt-2 text-xs font-medium text-[var(--primary)]">
+                      Converting to {item.outputFormat.toUpperCase()}
                     </p>
                   </div>
                 </div>

@@ -732,7 +732,7 @@ export function ConverterCard() {
     state.isConverting || (progressItems.length > 0 && convertedFiles.length === 0);
   const exceedsLimitMessage =
     overLimitCount > 0 && usage
-      ? `You only have ${usage.remaining} conversions left. Remove ${overLimitCount} images or sign in to continue.`
+      ? `${overLimitCount} selected image${overLimitCount === 1 ? "" : "s"} exceed your remaining daily limit. Remove the highlighted file${overLimitCount === 1 ? "" : "s"} or sign in for more room.`
       : null;
   const exceedsBatchMessage = overBatchLimit
     ? `Your current plan supports up to ${activePolicy.maxBatchFiles} images at once.`
@@ -748,40 +748,39 @@ export function ConverterCard() {
       />
 
       <main>
-        <section className="relative overflow-hidden px-4 pb-18 pt-12 sm:px-6 sm:pb-20 sm:pt-16">
+        <section className="relative overflow-hidden px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
           <div className="mx-auto max-w-7xl">
             <div className="mx-auto max-w-3xl text-center">
-              <span className="inline-flex rounded-full border bg-[var(--card)] px-4 py-2 text-sm font-medium text-[var(--primary)]">
-                Fast image conversion
+              <span className="inline-flex rounded-full border bg-[var(--card)] px-4 py-2 text-sm font-semibold text-[var(--primary)]">
+                Simple image converter
               </span>
-              <h1 className="mt-6 text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-6xl">
-                Convert images in seconds.
+              <h1 className="mt-5 text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl lg:text-6xl">
+                Convert images without the clutter.
               </h1>
-              <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-[var(--muted-foreground)]">
-                A clean and simple image converter for AVIF, BMP, GIF, ICO, JPG, JPEG, JFIF, PNG, TIFF, and WEBP files.
-                Upload, convert, and download without the clutter.
+              <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-[var(--muted-foreground)] sm:text-lg sm:leading-8">
+                Upload your images, choose a format, and download the converted files. It works for PNG, JPG, WEBP, AVIF, GIF, TIFF, and more.
               </p>
             </div>
 
-            <div id="converter" className="converter-spotlight mx-auto mt-10 max-w-4xl">
-              <div className="card-shadow rounded-[2rem] border bg-[var(--card)] p-5 sm:p-8">
+            <div id="converter" className="converter-spotlight mx-auto mt-9 max-w-4xl scroll-mt-28">
+              <div className="card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                       <Sparkles className="h-4 w-4" />
                       {APP_NAME}
                     </div>
-                    <h2 className="mt-4 text-2xl font-semibold text-[var(--foreground)]">
-                      Upload, convert, and download
+                    <h2 className="mt-4 text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
+                      Start with your images
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-                      Single image or full batch conversion with calm, clean controls.
+                      Add one image or a small batch. We will show only the files that need attention.
                     </p>
                   </div>
                   <UsageBadge usage={usage} />
                 </div>
 
-                <div className="mt-8 space-y-6">
+                <div className="mt-7 space-y-5">
                   {!hasSelectedFiles ? (
                     <UploadBox
                       onFilesSelected={handleFilesSelected}
@@ -791,7 +790,7 @@ export function ConverterCard() {
 
                   <div className="space-y-4">
                     {hasSelectedFiles ? (
-                      <div className="rounded-3xl border bg-[var(--card-muted)] p-4">
+                      <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-3 sm:p-4">
                         <UploadBox
                           onFilesSelected={handleFilesSelected}
                           compact
@@ -809,13 +808,12 @@ export function ConverterCard() {
                       <FileList files={selectedFiles} onRemove={handleRemoveFile} />
                     )}
 
-                    <div className="rounded-3xl border bg-[var(--card-muted)] p-5 sm:p-6">
-                      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)] lg:items-end">
+                    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-4 sm:p-5">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)] lg:items-end">
                         <div className="space-y-3">
                           <FormatSelector value={outputFormat} onChange={setOutputFormat} />
-                          <p className="rounded-2xl border border-dashed bg-[var(--card)] px-4 py-3 text-sm leading-6 text-[var(--muted-foreground)]">
-                            Choose the format you want back. Conversion settings are
-                            optimized automatically for clean, reliable downloads.
+                          <p className="rounded-2xl border bg-[var(--card)] px-4 py-3 text-sm leading-6 text-[var(--muted-foreground)]">
+                            We keep the settings simple and choose reliable defaults for clean downloads.
                           </p>
                         </div>
                         <div className="space-y-3 rounded-2xl border bg-[var(--card)] p-4">
@@ -825,7 +823,7 @@ export function ConverterCard() {
                               onClick={() => openAuthModal("signup")}
                               className="inline-flex w-full justify-center rounded-full border border-[var(--primary)] px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:bg-[var(--background-secondary)]"
                             >
-                              Sign in to unlock more
+                              Sign in for more conversions
                             </button>
                           ) : null}
                           <button
@@ -839,6 +837,10 @@ export function ConverterCard() {
                                 <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                                 Converting...
                               </>
+                            ) : convertedFiles.length ? (
+                              "Convert again"
+                            ) : !selectedFiles.length ? (
+                              "Upload images first"
                             ) : selectedFiles.length === 1 ? (
                               "Convert image"
                             ) : (
@@ -851,7 +853,7 @@ export function ConverterCard() {
                             </p>
                           ) : null}
                           <p className="text-center text-xs text-[var(--muted-foreground)]">
-                            {activePolicy.maxBatchFiles} images per batch -{" "}
+                            Up to {activePolicy.maxBatchFiles} images per batch -{" "}
                             {formatFileSize(activePolicy.maxFileSizeBytes)} per image
                           </p>
                         </div>
@@ -871,12 +873,12 @@ export function ConverterCard() {
 
                       {!hasSelectedFiles ? (
                         <div className="mt-4 rounded-2xl border border-dashed bg-[var(--card)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
-                          Start by dragging in an AVIF, BMP, GIF, ICO, JPG, JPEG, JFIF, PNG, TIFF, or WEBP file, then choose the format you want back.
+                          Start by adding an image, then choose the format you want back.
                         </div>
                       ) : null}
                     </div>
 
-                    <div className="flex gap-3 rounded-3xl border bg-[var(--card-muted)] p-4 text-sm text-[var(--muted-foreground)]">
+                    <div className="flex gap-3 rounded-[1.25rem] border bg-[var(--card-muted)] p-4 text-sm text-[var(--muted-foreground)]">
                       <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary)]" />
                       <p className="leading-6">
                         Files are processed temporarily. Guest downloads expire after 1 hour,

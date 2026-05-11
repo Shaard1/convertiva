@@ -2,7 +2,7 @@
 
 import { ChangeEvent, DragEvent, useRef, useState } from "react";
 import clsx from "clsx";
-import { ImageUp, TriangleAlert } from "lucide-react";
+import { ImageUp, MousePointerClick, TriangleAlert } from "lucide-react";
 import {
   SUPPORTED_INPUT_ACCEPT,
   SUPPORTED_INPUT_EXTENSIONS,
@@ -73,7 +73,7 @@ export function UploadBox({
     const files = Array.from(fileList);
 
     if (hasUnsupportedFiles(files)) {
-      setDropNotice("Some files may not be supported.");
+      setDropNotice("Some files were not recognized. Supported image types work best.");
     } else {
       setDropNotice(null);
     }
@@ -118,8 +118,8 @@ export function UploadBox({
       onDragLeave={() => setDragStatus("idle")}
       onDrop={handleDrop}
       className={clsx(
-        "cursor-pointer border border-dashed text-center transition duration-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]",
-        compact ? "rounded-2xl px-4 py-4" : "rounded-3xl px-6 py-8",
+        "cursor-pointer border border-dashed text-center transition duration-200",
+        compact ? "rounded-2xl px-4 py-4" : "rounded-[1.5rem] px-5 py-7 sm:px-6 sm:py-8",
         isRejected
           ? "border-[var(--danger)] bg-[var(--danger)]/10"
           : isDragging
@@ -138,7 +138,7 @@ export function UploadBox({
       />
       {compact ? (
         <div className="flex items-center justify-center gap-3 text-left sm:justify-start">
-          <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--card)] text-[var(--primary)] shadow-sm">
+          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--card)] text-[var(--primary)] shadow-sm">
             <ImageUp className="h-5 w-5" />
           </div>
           <div>
@@ -146,7 +146,7 @@ export function UploadBox({
               {isRejected ? "Unsupported file type" : "Add more images"}
             </p>
             <p className="mt-1 text-xs text-[var(--muted-foreground)]">
-              Drag files here or click to browse
+              Drop files here or browse
             </p>
           </div>
         </div>
@@ -166,17 +166,28 @@ export function UploadBox({
           </div>
           <p className="mt-5 text-lg font-semibold text-[var(--foreground)]">
             {isRejected
-              ? "That file type is not supported"
+              ? "This file type is not supported"
               : isDragging
                 ? "Release to upload"
-                : "Drop your images here"}
+                : "Upload your images"}
           </p>
-          <p className="mt-2 text-sm text-[var(--muted-foreground)]">
-            or click to browse
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
+            Drag files here or click to choose them from your device.
           </p>
-          <p className="mt-4 text-xs uppercase tracking-[0.24em] text-[var(--muted-foreground)]">
-            Supports AVIF, BMP, GIF, ICO, JPG, JPEG, JFIF, PNG, TIFF, and WEBP{sizeLabel}.
-          </p>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2 text-xs font-medium text-[var(--muted-foreground)]">
+            <span className="inline-flex items-center gap-1 rounded-full border bg-[var(--card)] px-3 py-2">
+              <MousePointerClick className="h-3.5 w-3.5" />
+              Browse files
+            </span>
+            <span className="rounded-full border bg-[var(--card)] px-3 py-2">
+              PNG, JPG, WEBP, AVIF and more
+            </span>
+            {sizeLabel ? (
+              <span className="rounded-full border bg-[var(--card)] px-3 py-2">
+                {sizeLabel.trim()}
+              </span>
+            ) : null}
+          </div>
           {dropNotice ? (
             <p className="mt-3 text-xs font-medium text-[var(--danger)]">
               {dropNotice}

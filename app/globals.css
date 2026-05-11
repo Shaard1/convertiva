@@ -18,6 +18,7 @@
   --success: #4f7a45;
   --danger: #b42318;
   --shadow: 0 20px 60px rgba(62, 95, 68, 0.08);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
   --font-sans:
     "Segoe UI", "Inter", "Helvetica Neue", Arial, system-ui, -apple-system,
     BlinkMacSystemFont, sans-serif;
@@ -39,6 +40,7 @@
   --success: #7ba26a;
   --danger: #f97066;
   --shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--primary) 32%, transparent);
 }
 
 html {
@@ -56,6 +58,32 @@ body {
   background-size: auto, auto, 42px 42px, 42px 42px, auto;
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+input,
+select {
+  min-height: 44px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 3px;
+  box-shadow: var(--focus-ring);
 }
 
 body::before {

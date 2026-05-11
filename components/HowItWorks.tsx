@@ -5,23 +5,23 @@ const steps = [
   {
     icon: ImageUp,
     title: "Upload your images",
-    description: "Drag in one or more AVIF, BMP, GIF, ICO, JPG, JPEG, JFIF, PNG, TIFF, or WEBP files.",
+    description: "Drag in one image or a small batch. The app checks each file before converting.",
   },
   {
     icon: SlidersHorizontal,
     title: "Choose output format",
-    description: "Pick one output type for the full batch and keep the flow focused.",
+    description: "Pick the image type you want back. The same choice applies to every selected file.",
   },
   {
     icon: Download,
     title: "Convert and download",
-    description: "Get individual downloads or package everything into one ZIP file.",
+    description: "Download each image, or grab the whole batch as one ZIP file.",
   },
 ];
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="section-fade py-20">
+    <section id="how-it-works" className="section-fade py-16 sm:py-20">
       <div className="mx-auto max-w-7xl px-6">
         <SectionHeading
           badge="How it works"
@@ -29,14 +29,14 @@ export function HowItWorks() {
           description="The experience stays focused on one job: upload, convert, and download without extra noise."
         />
 
-        <div className="mt-12 grid gap-6 lg:grid-cols-3">
+        <div className="mt-10 grid gap-5 lg:grid-cols-3">
           {steps.map((step, index) => {
             const Icon = step.icon;
 
             return (
               <div
                 key={step.title}
-                className="rounded-3xl border bg-[var(--card)] p-6 transition duration-300 hover:-translate-y-1"
+                className="rounded-[1.5rem] border bg-[var(--card)] p-6 transition duration-300 hover:-translate-y-1"
               >
                 <div className="flex items-center gap-4">
                   <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--background-secondary)] text-base font-semibold text-[var(--primary)]">

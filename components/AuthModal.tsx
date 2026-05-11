@@ -76,12 +76,13 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
       : "Sign up for higher daily limits";
   }, [activeMode]);
 
-  const googleButtonLabel =
-    activeMode === "signup" ? "Sign up with Google" : "Log in with Google";
+  const googleButtonLabel = "Continue with Google";
 
   function validateForm(): string | null {
     if (!email || (activeMode !== "forgot" && !password)) {
-      return "Please enter your email and password.";
+      return activeMode === "forgot"
+        ? "Please enter your email address."
+        : "Please enter your email and password.";
     }
 
     const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -94,7 +95,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
     }
 
     if (password.length < 6) {
-      return "Password must be at least 6 characters.";
+      return "Use at least 6 characters for your password.";
     }
 
     if (activeMode === "signup" && password !== confirmPassword) {
@@ -223,14 +224,18 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
                 )}
                 {googleButtonLabel}
               </button>
-              <div className="mt-1 h-px bg-[var(--border)]" />
+              <div className="mt-1 flex items-center gap-3 text-xs text-[var(--muted-foreground)]">
+                <span className="h-px flex-1 bg-[var(--border)]" />
+                <span>or use email</span>
+                <span className="h-px flex-1 bg-[var(--border)]" />
+              </div>
             </div>
           ) : null}
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           <div>
             <label htmlFor="auth-email" className="mb-2 block text-sm font-medium">
-              Email
+              Email address
             </label>
             <input
               id="auth-email"
@@ -239,6 +244,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="email"
               required
+              placeholder="you@example.com"
               className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
             />
           </div>
@@ -257,6 +263,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
                   autoComplete={activeMode === "login" ? "current-password" : "new-password"}
                   required
                   minLength={6}
+                  placeholder="At least 6 characters"
                   className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
                 />
                 <button
@@ -289,6 +296,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
                   autoComplete="new-password"
                   required
                   minLength={6}
+                  placeholder="Repeat your password"
                   className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
                 />
                 <button

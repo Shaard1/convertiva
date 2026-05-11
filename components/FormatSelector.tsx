@@ -12,16 +12,16 @@ export function FormatSelector({ value, onChange }: FormatSelectorProps) {
     <div>
       <label
         htmlFor="output-format"
-        className="mb-3 block text-sm font-medium text-[var(--foreground)]"
+        className="mb-2 block text-sm font-semibold text-[var(--foreground)]"
       >
-        Output format
+        Convert to
       </label>
       <div className="relative">
         <select
           id="output-format"
           value={value}
           onChange={(event) => onChange(event.target.value as OutputFormat)}
-          className="w-full appearance-none rounded-2xl border bg-[var(--card)] px-4 py-3 pr-11 text-sm font-medium uppercase tracking-[0.16em] text-[var(--foreground)] outline-none transition hover:border-[var(--primary)] focus:border-[var(--primary)]"
+          className="w-full appearance-none rounded-2xl border bg-[var(--card)] px-4 py-3 pr-11 text-sm font-semibold uppercase text-[var(--foreground)] outline-none transition hover:border-[var(--primary)] focus:border-[var(--primary)]"
         >
           {SUPPORTED_OUTPUT_FORMATS.map((format) => (
             <option key={format} value={format}>

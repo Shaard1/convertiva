@@ -20,7 +20,7 @@ export function ConversionHistoryList({ items }: ConversionHistoryListProps) {
   }
 
   return (
-    <div className="rounded-3xl border bg-[var(--card-muted)] p-5">
+    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-5">
       <div className="flex items-center gap-2">
         <History className="h-4 w-4 text-[var(--primary)]" />
         <p className="text-base font-semibold text-[var(--foreground)]">
@@ -46,7 +46,7 @@ export function ConversionHistoryList({ items }: ConversionHistoryListProps) {
             <a
               href={item.downloadUrl}
               download={item.fileName}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--primary)] bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:-translate-y-0.5"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--primary)] bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:-translate-y-0.5 hover:bg-[var(--background-secondary)]"
             >
               <Download className="h-4 w-4" />
               Download

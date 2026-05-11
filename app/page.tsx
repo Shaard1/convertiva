@@ -13,23 +13,23 @@ export default function HomePage() {
       <SupportedFormats />
       <HowItWorks />
 
-      <section className="soft-section section-fade py-20">
+      <section className="soft-section section-fade py-16 sm:py-20">
         <div className="mx-auto max-w-5xl px-6">
-          <div className="rounded-[2rem] border bg-[var(--card)] p-8">
+          <div className="rounded-[1.5rem] border bg-[var(--card)] p-6 sm:p-8">
             <SectionHeading
               badge="Why sign up"
-              title="Get more conversions with an account."
-              description="Use Convertly Image as a guest or sign in to unlock a higher daily conversion limit."
+              title="More room when you need it"
+              description="You can convert as a guest, or sign in when you want a higher daily limit and short-term history."
               center={false}
             />
-            <div className="mt-8 grid gap-4 md:grid-cols-3">
-              <div className="rounded-3xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
+            <div className="mt-8 grid gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
                 Guest users get 15 conversions per day.
               </div>
-              <div className="rounded-3xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
+              <div className="rounded-2xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
                 Logged-in free users get 75 conversions per day.
               </div>
-              <div className="rounded-3xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
+              <div className="rounded-2xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
                 Logged-in users keep their last 20 conversions for 24 hours.
               </div>
             </div>

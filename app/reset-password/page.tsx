@@ -21,7 +21,7 @@ export default function ResetPasswordPage() {
     setSuccess(null);
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError("Use at least 6 characters for your password.");
       return;
     }
 
@@ -50,14 +50,14 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl items-center justify-center px-6">
-      <div className="w-full rounded-3xl border bg-[var(--card)] p-8">
+    <main className="mx-auto flex min-h-screen max-w-xl items-center justify-center px-4 py-10 sm:px-6">
+      <div className="w-full rounded-[1.5rem] border bg-[var(--card)] p-6 shadow-[var(--shadow)] sm:p-8">
         <p className="text-sm font-medium text-[var(--primary)]">Reset password</p>
         <h1 className="mt-2 text-3xl font-semibold text-[var(--foreground)]">
           Choose a new password
         </h1>
         <p className="mt-3 text-sm text-[var(--muted-foreground)]">
-          Enter your new password and confirm it below.
+          Enter your new password below. Keep it private and easy for you to remember.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -73,7 +73,8 @@ export default function ResetPasswordPage() {
                 onChange={(event) => setPassword(event.target.value)}
                 minLength={6}
                 required
-                className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)]"
+                placeholder="At least 6 characters"
+                className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
               />
               <button
                 type="button"
@@ -98,7 +99,8 @@ export default function ResetPasswordPage() {
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 minLength={6}
                 required
-                className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)]"
+                placeholder="Repeat your password"
+                className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
               />
               <button
                 type="button"
@@ -116,7 +118,7 @@ export default function ResetPasswordPage() {
           </div>
 
           {error ? (
-            <div className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
+            <div role="alert" className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
               {error}
             </div>
           ) : null}
