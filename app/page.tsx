@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { PlatformDashboard } from "@/components/PlatformDashboard";
 
 export default function HomePage() {
-  redirect("/tools/image-converter");
+  return <PlatformDashboard />;
 }

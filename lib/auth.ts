@@ -135,7 +135,7 @@ export async function signUpWithPassword(
     return {
       error: null,
       success:
-        "Convertly Image sent a confirmation link to your email. Open it to finish creating your account.",
+        "Convertly sent a confirmation link to your email. Open it to finish creating your account.",
     };
   } catch {
     return { error: "We couldn't create your account right now. Please try again." };

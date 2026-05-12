@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { ChevronDown, FileImage, LogOut, Menu, Video, X } from "lucide-react";
+import { ChevronDown, FileImage, FileText, LogOut, Menu, Music, Video, X } from "lucide-react";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -18,6 +18,8 @@ type NavbarProps = {
 const converterLinks = [
   { label: "Image Converter", href: "/tools/image-converter", icon: FileImage },
   { label: "Video Converter", href: "/tools/video-converter", icon: Video },
+  { label: "Document Converter", href: "/tools/document-converter", icon: FileText },
+  { label: "Audio Converter", href: "/tools/audio-converter", icon: Music },
 ];
 
 const navLinks = [
@@ -117,12 +119,12 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             href="/tools/image-converter"
             onClick={closeMenu}
             className="flex min-w-0 items-center gap-3 rounded-full pr-2 transition"
-            aria-label="Convertly Image home"
+            aria-label="Convertly home"
           >
             <span className="inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-full ring-1 ring-[var(--border)] sm:h-11 sm:w-11">
               <Image
                 src="/brand/logo.png"
-                alt="Convertly Image logo"
+                alt="Convertly logo"
                 width={44}
                 height={44}
                 className="h-full w-full object-cover"
@@ -131,10 +133,10 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             </span>
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-[17px] font-semibold text-[#263128] dark:text-[var(--foreground)] sm:text-[18px]">
-                Convertly Image
+                Convertly
               </span>
               <span className="mt-0.5 hidden text-[11px] font-medium text-[#6F786F] dark:text-[var(--muted-foreground)] sm:block">
-                Easy image conversion
+                Easy file conversion
               </span>
             </span>
           </a>

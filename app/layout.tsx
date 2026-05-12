@@ -3,9 +3,9 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Convertly Image",
+  title: "Convertly",
   description:
-    "A minimal image converter for AVIF, BMP, GIF, ICO, JPG, JPEG, JFIF, PNG, TIFF, and WEBP files.",
+    "A minimal converter platform for image, video, document, and audio files.",
   icons: {
     icon: "/brand/favicon.png",
     shortcut: "/brand/favicon.png",

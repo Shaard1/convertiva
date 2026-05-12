@@ -14,7 +14,6 @@ import { Navbar } from "@/components/Navbar";
 import { UploadBox } from "@/components/UploadBox";
 import { signOutUser } from "@/lib/auth";
 import {
-  APP_NAME,
   CONVERSION_POLICIES,
   LOGGED_IN_HISTORY_LIMIT,
 } from "@/lib/constants";
@@ -900,32 +899,20 @@ export function ConverterCard() {
 
       <main>
         <section className="relative overflow-visible px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
-          <div className="mx-auto max-w-7xl">
-            <div className="mx-auto max-w-3xl text-center">
-              <span className="inline-flex rounded-full border bg-[var(--card)] px-4 py-2 text-sm font-semibold text-[var(--primary)]">
-                Simple image converter
-              </span>
-              <h1 className="mt-5 text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl lg:text-6xl">
-                Convert images without the clutter.
-              </h1>
-              <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-[var(--muted-foreground)] sm:text-lg sm:leading-8">
-                Upload your images, choose a format, and download the converted files. It works for PNG, JPG, WEBP, AVIF, GIF, TIFF, and more.
-              </p>
-            </div>
-
-            <div id="converter" className="converter-spotlight mx-auto mt-9 max-w-4xl scroll-mt-28">
+          <div className="mx-auto max-w-4xl">
+            <div id="converter" className="converter-spotlight scroll-mt-28">
               <div className="card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                       <Sparkles className="h-4 w-4" />
-                      {APP_NAME}
+                      Convertly Image
                     </div>
-                    <h2 className="mt-4 text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
-                      Start with your images
-                    </h2>
+                    <h1 className="mt-4 text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
+                      Convert images without the hassle
+                    </h1>
                     <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-                      Upload one image or a small batch, then choose your output format.
+                      Upload your images, choose your output format, and convert them in a few clicks.
                     </p>
                   </div>
                 </div>

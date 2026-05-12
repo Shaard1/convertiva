@@ -156,7 +156,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
       if (activeMode === "signup") {
         setSuccess(
           result.success ??
-            "Convertly Image sent a confirmation link to your email.",
+            "Convertly sent a confirmation link to your email.",
         );
       } else {
         onClose();
