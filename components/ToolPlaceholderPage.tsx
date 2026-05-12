@@ -59,7 +59,7 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
             <div className="card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
               <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                 <ConverterToolIcon icon={tool.icon} className="h-4 w-4" />
-                Convertly Tools
+                Convertiva Tools
               </div>
               <h1 className="mt-4 text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
                 {tool.title}
@@ -117,7 +117,7 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
             <SectionHeading
               badge="How it works"
               title="A simple flow is planned"
-              description="The final tool will follow the same clear Convertly pattern."
+              description="The final tool will follow the same clear Convertiva pattern."
             />
             <div className="mt-10 grid gap-5 lg:grid-cols-3">
               {plannedSteps.map((step, index) => {
@@ -154,3 +154,4 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
     </div>
   );
 }
+

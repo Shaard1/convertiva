@@ -5,7 +5,7 @@ export default function Page() {
     <InfoPage
       badge="Pricing"
       title="Simple room for free use, with more space when you need it."
-      description="Convertly is built to be easy to start with and clearer to grow into. Guest use stays fast, and signed-in users get higher limits where supported."
+      description="Convertiva is built to be easy to start with and clearer to grow into. Guest use stays fast, and signed-in users get higher limits where supported."
       sections={[
         {
           title: "Guest access",
@@ -13,7 +13,7 @@ export default function Page() {
         },
         {
           title: "Signed-in limits",
-          body: "Accounts unlock more daily conversions and extra processing room for supported tools without changing the simple Convertly flow.",
+          body: "Accounts unlock more daily conversions and extra processing room for supported tools without changing the simple Convertiva flow.",
         },
         {
           title: "Platform direction",
@@ -27,3 +27,4 @@ export default function Page() {
     />
   );
 }
+

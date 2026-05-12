@@ -39,13 +39,13 @@ export function PlatformDashboard() {
             <div className="section-fade text-center">
               <span className="inline-flex items-center gap-2 rounded-full border bg-[color-mix(in_srgb,var(--card)_82%,transparent)] px-4 py-2 text-sm font-semibold text-[var(--primary-dark)] dark:text-[var(--foreground)]">
                 <Sparkles className="h-4 w-4 text-[var(--primary)]" />
-                Convertly keeps file conversion simple
+                Convertiva keeps file conversion simple
               </span>
               <h1 className="mx-auto mt-6 max-w-4xl text-4xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl lg:text-6xl">
-                Convertly gives every file a cleaner path.
+                Convertiva gives every file a cleaner path.
               </h1>
               <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-[var(--muted-foreground)] sm:text-lg">
-                Choose the right Convertly tool, upload your file, and move through image, video, document, audio, and utility tasks without a messy workflow.
+                Choose the right Convertiva tool, upload your file, and move through image, video, document, audio, and utility tasks without a messy workflow.
               </p>
               <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <Link
@@ -75,7 +75,7 @@ export function PlatformDashboard() {
                 </span>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--primary)]">
-                    Convertly tools
+                    Convertiva tools
                   </p>
                   <h2 className="mt-1 text-2xl font-semibold text-[var(--foreground)]">
                     Formats and tools, grouped by task.
@@ -115,17 +115,17 @@ export function PlatformDashboard() {
               <FeatureCard
                 icon={ShieldCheck}
                 title="Files stay temporary"
-                text="Convertly keeps processing short-lived, limits clear, and the workflow focused on what you need."
+                text="Convertiva keeps processing short-lived, limits clear, and the workflow focused on what you need."
               />
               <FeatureCard
                 icon={SlidersHorizontal}
                 title="Options when needed"
-                text="Convertly adds size, quality, bitrate, trim, and other settings only where they help."
+                text="Convertiva adds size, quality, bitrate, trim, and other settings only where they help."
               />
               <FeatureCard
                 icon={LockKeyhole}
                 title="Built for accounts"
-                text="Guests can start right away. Signed-in Convertly users get higher daily limits and extra room where supported."
+                text="Guests can start right away. Signed-in Convertiva users get higher daily limits and extra room where supported."
               />
             </div>
           </div>
@@ -137,17 +137,17 @@ export function PlatformDashboard() {
               How it works
             </p>
             <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--foreground)]">
-              How Convertly keeps conversion simple.
+              How Convertiva keeps conversion simple.
             </h2>
             <div className="mt-8 grid gap-3 md:grid-cols-3">
-              {["Choose a Convertly tool", "Upload your file", "Pick the result you need"].map((step, index) => (
+              {["Choose a Convertiva tool", "Upload your file", "Pick the result you need"].map((step, index) => (
                 <div key={step} className="rounded-2xl border bg-[var(--card-muted)] p-5 text-left">
                   <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--background-secondary)] text-sm font-semibold text-[var(--primary-dark)] dark:text-[var(--foreground)]">
                     {index + 1}
                   </span>
                   <p className="mt-4 font-semibold text-[var(--foreground)]">{step}</p>
                   <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-                    Convertly keeps the flow clear, friendly, and easy to follow from start to download.
+                    Convertiva keeps the flow clear, friendly, and easy to follow from start to download.
                   </p>
                 </div>
               ))}
@@ -181,3 +181,4 @@ function FeatureCard({
     </div>
   );
 }
+

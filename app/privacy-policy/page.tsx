@@ -4,8 +4,8 @@ export default function Page() {
   return (
     <InfoPage
       badge="Privacy policy"
-      title="Convertly keeps file handling temporary and focused."
-      description="Privacy matters most during upload, processing, and download. Convertly is built around short-lived file handling rather than long-term storage."
+      title="Convertiva keeps file handling temporary and focused."
+      description="Privacy matters most during upload, processing, and download. Convertiva is built around short-lived file handling rather than long-term storage."
       sections={[
         {
           title: "Temporary processing",
@@ -21,9 +21,10 @@ export default function Page() {
         },
         {
           title: "Platform direction",
-          body: "As Convertly grows, privacy details can expand, but the default product direction stays clear: process files, then let them go.",
+          body: "As Convertiva grows, privacy details can expand, but the default product direction stays clear: process files, then let them go.",
         },
       ]}
     />
   );
 }
+

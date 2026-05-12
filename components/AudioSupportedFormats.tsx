@@ -9,7 +9,7 @@ export function AudioSupportedFormats() {
         <SectionHeading
           badge="Formats"
           title="Supported audio formats"
-          description="Convertly Audio supports common music, web, mobile, lossless, and legacy audio formats."
+          description="Convertiva Audio supports common music, web, mobile, lossless, and legacy audio formats."
         />
 
         <div className="mx-auto mt-10 rounded-[1.5rem] border bg-[var(--card)] p-5 sm:p-7">
@@ -42,3 +42,4 @@ export function AudioSupportedFormats() {
     </section>
   );
 }
+

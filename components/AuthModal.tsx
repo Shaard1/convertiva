@@ -156,7 +156,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
       if (activeMode === "signup") {
         setSuccess(
           result.success ??
-            "Convertly sent a confirmation link to your email.",
+            "Convertiva sent a confirmation link to your email.",
         );
       } else {
         onClose();
@@ -415,3 +415,4 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
     </div>
   );
 }
+

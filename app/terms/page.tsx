@@ -4,12 +4,12 @@ export default function Page() {
   return (
     <InfoPage
       badge="Terms"
-      title="Use Convertly for supported, everyday file tasks."
+      title="Use Convertiva for supported, everyday file tasks."
       description="These terms are presented in plain language for the current platform stage and can grow with the product as more tools become available."
       sections={[
         {
           title: "Supported use",
-          body: "Use Convertly with supported file types, public website inputs where allowed, and normal conversion workflows.",
+          body: "Use Convertiva with supported file types, public website inputs where allowed, and normal conversion workflows.",
         },
         {
           title: "Limits",
@@ -27,3 +27,4 @@ export default function Page() {
     />
   );
 }
+

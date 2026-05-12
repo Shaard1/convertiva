@@ -1,6 +1,6 @@
-# Convertly
+# Convertiva
 
-Convertly is a file conversion platform built with Next.js. It includes dedicated tools for images, video, audio, documents, archives, PDFs, website capture, and spreadsheet conversion, with a soft green UI, responsive layouts, light and dark mode, guest usage limits, and higher limits for signed-in users.
+Convertiva is a file conversion platform built with Next.js. It includes dedicated tools for images, video, audio, documents, archives, PDFs, website capture, and spreadsheet conversion, with a soft green UI, responsive layouts, light and dark mode, guest usage limits, and higher limits for signed-in users.
 
 ## Current platform
 
@@ -267,3 +267,4 @@ npm test
 - Add real help, pricing, privacy, terms, and contact content
 - Add engine-backed implementations for the remaining coming-soon tools
 - Expand test coverage around the newer tool routes
+

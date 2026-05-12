@@ -5,7 +5,7 @@ export default function Page() {
     <InfoPage
       badge="Contact"
       title="Reach out when you need a clearer answer."
-      description="Convertly is still growing into a fuller tools platform. If you need help, want to report an issue, or have a feature request, this page gives the right starting points."
+      description="Convertiva is still growing into a fuller tools platform. If you need help, want to report an issue, or have a feature request, this page gives the right starting points."
       sections={[
         {
           title: "Product questions",
@@ -27,3 +27,4 @@ export default function Page() {
     />
   );
 }
+

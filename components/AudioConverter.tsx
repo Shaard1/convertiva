@@ -353,7 +353,7 @@ export function AudioConverter() {
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                   <Music className="h-4 w-4" />
-                  Convertly Audio
+                  Convertiva Audio
                 </div>
                 <h1 className="mt-4 text-2xl font-semibold text-[var(--foreground)] sm:text-3xl">
                   Convert audio without the hassle
@@ -868,3 +868,4 @@ function OptionSelect({
     </label>
   );
 }
+

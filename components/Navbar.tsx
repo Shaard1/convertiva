@@ -117,12 +117,12 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             href="/"
             onClick={closeMenu}
             className="flex min-w-0 items-center gap-3 rounded-full pr-2 transition"
-            aria-label="Convertly home"
+            aria-label="Convertiva home"
           >
             <span className="inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-full ring-1 ring-[var(--border)] sm:h-11 sm:w-11">
               <Image
                 src="/brand/logo.png"
-                alt="Convertly logo"
+                alt="Convertiva logo"
                 width={44}
                 height={44}
                 className="h-full w-full object-cover"
@@ -131,7 +131,7 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             </span>
             <span className="min-w-0 leading-tight">
               <span className="block truncate text-[17px] font-semibold text-[#263128] dark:text-[var(--foreground)] sm:text-[18px]">
-                Convertly
+                Convertiva
               </span>
               <span className="mt-0.5 hidden text-[11px] font-medium text-[#6F786F] dark:text-[var(--muted-foreground)] sm:block">
                 by Jaiidonee
@@ -284,3 +284,4 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
     </header>
   );
 }
+

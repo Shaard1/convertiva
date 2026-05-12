@@ -9,7 +9,7 @@ export function DocumentSupportedFormats() {
         <SectionHeading
           badge="Formats"
           title="Supported document formats"
-          description="Convertly Document supports everyday writing formats, office files, and older document types."
+          description="Convertiva Document supports everyday writing formats, office files, and older document types."
         />
 
         <div className="mx-auto mt-10 rounded-[1.5rem] border bg-[var(--card)] p-5 sm:p-7">
@@ -42,3 +42,4 @@ export function DocumentSupportedFormats() {
     </section>
   );
 }
+

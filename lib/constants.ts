@@ -1,7 +1,7 @@
 import { OutputFormat } from "@/types/converter";
 
 export const PROJECT_NAME = "Jaiidonee Convert";
-export const APP_NAME = "Convertly";
+export const APP_NAME = "Convertiva";
 
 export const SUPPORTED_INPUT_MIME_TYPES = [
   "image/avif",
@@ -76,3 +76,4 @@ export const CONVERSION_POLICIES = {
 } as const;
 
 export type ConversionPolicyName = keyof typeof CONVERSION_POLICIES;
+

@@ -42,7 +42,7 @@ export function Footer() {
               <span className="inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-2xl ring-1 ring-[var(--border)]/70">
                 <Image
                   src="/brand/logo.png"
-                  alt="Convertly logo"
+                  alt="Convertiva logo"
                   width={40}
                   height={40}
                   className="h-full w-full object-cover"
@@ -106,3 +106,4 @@ function FooterColumn({
     </div>
   );
 }
+

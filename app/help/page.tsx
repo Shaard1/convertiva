@@ -4,8 +4,8 @@ export default function Page() {
   return (
     <InfoPage
       badge="Help"
-      title="Help that matches the Convertly workflow."
-      description="Convertly is designed to stay simple: pick a tool, upload your file, choose the result, and download it. These notes cover the basics."
+      title="Help that matches the Convertiva workflow."
+      description="Convertiva is designed to stay simple: pick a tool, upload your file, choose the result, and download it. These notes cover the basics."
       sections={[
         {
           title: "Choosing a tool",
@@ -27,3 +27,4 @@ export default function Page() {
     />
   );
 }
+

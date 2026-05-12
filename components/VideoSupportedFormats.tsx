@@ -9,7 +9,7 @@ export function VideoSupportedFormats() {
         <SectionHeading
           badge="Formats"
           title="Supported video formats"
-          description="Convertly Video accepts common web, mobile, professional, and legacy video formats."
+          description="Convertiva Video accepts common web, mobile, professional, and legacy video formats."
         />
 
         <div className="mx-auto mt-10 rounded-[1.5rem] border bg-[var(--card)] p-5 sm:p-7">
@@ -42,3 +42,4 @@ export function VideoSupportedFormats() {
     </section>
   );
 }
+

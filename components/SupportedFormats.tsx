@@ -21,7 +21,7 @@ export function SupportedFormats() {
         <SectionHeading
           badge="Formats"
           title="Supported image formats"
-          description="Convertly Image accepts the formats below for upload and conversion."
+          description="Convertiva Image accepts the formats below for upload and conversion."
         />
 
         <div className="mx-auto mt-10 rounded-[1.5rem] border bg-[var(--card)] p-5 sm:p-7">
@@ -56,3 +56,4 @@ export function SupportedFormats() {
     </section>
   );
 }
+

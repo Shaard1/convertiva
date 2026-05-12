@@ -135,7 +135,7 @@ export async function signUpWithPassword(
     return {
       error: null,
       success:
-        "Convertly sent a confirmation link to your email. Open it to finish creating your account.",
+        "Convertiva sent a confirmation link to your email. Open it to finish creating your account.",
     };
   } catch {
     return { error: "We couldn't create your account right now. Please try again." };
@@ -230,3 +230,4 @@ export async function signOutUser(): Promise<AuthResult> {
     return { error: "We couldn't log you out right now. Please try again." };
   }
 }
+

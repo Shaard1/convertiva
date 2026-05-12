@@ -4,7 +4,7 @@ import { RouteLoadingIndicator } from "@/components/RouteLoadingIndicator";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title: "Convertly",
+  title: "Convertiva",
   description:
     "A minimal converter platform for image, video, document, and audio files.",
   icons: {
@@ -43,3 +43,4 @@ export default function RootLayout({
     </html>
   );
 }
+
