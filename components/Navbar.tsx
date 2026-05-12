@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
-import { LogOut, Menu, X } from "lucide-react";
+import { ChevronDown, FileImage, LogOut, Menu, Video, X } from "lucide-react";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -15,8 +15,12 @@ type NavbarProps = {
   onLogout: () => Promise<void>;
 };
 
+const converterLinks = [
+  { label: "Image Converter", href: "/tools/image-converter", icon: FileImage },
+  { label: "Video Converter", href: "/tools/video-converter", icon: Video },
+];
+
 const navLinks = [
-  { label: "Convert", href: "#converter" },
   { label: "Formats", href: "#formats" },
   { label: "How it works", href: "#how-it-works" },
 ];
@@ -34,7 +38,9 @@ const signupButtonClass =
 export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isConvertersOpen, setIsConvertersOpen] = useState(false);
   const [hasScrolled, setHasScrolled] = useState(false);
+  const convertersRef = useRef<HTMLDivElement | null>(null);
   const showAuthenticatedActions = Boolean(user) && !usage?.isGuest;
 
   // Sticky scroll effect: add a subtle border/shadow only after the page moves.
@@ -47,6 +53,31 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
     window.addEventListener("scroll", updateScrolledState, { passive: true });
     return () => window.removeEventListener("scroll", updateScrolledState);
   }, []);
+
+  useEffect(() => {
+    if (!isConvertersOpen) {
+      return;
+    }
+
+    function handleClick(event: MouseEvent) {
+      if (!convertersRef.current?.contains(event.target as Node)) {
+        setIsConvertersOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsConvertersOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClick);
+    window.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isConvertersOpen]);
 
   async function handleLogout() {
     if (!showAuthenticatedActions) {
@@ -69,6 +100,7 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
 
   function closeMenu() {
     setIsMenuOpen(false);
+    setIsConvertersOpen(false);
   }
 
   return (
@@ -82,7 +114,7 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex min-h-[68px] items-center justify-between gap-3">
           <a
-            href="#"
+            href="/tools/image-converter"
             onClick={closeMenu}
             className="flex min-w-0 items-center gap-3 rounded-full pr-2 transition"
             aria-label="Convertly Image home"
@@ -111,6 +143,44 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             aria-label="Primary navigation"
             className="hidden items-center gap-1 rounded-full border bg-[color-mix(in_srgb,var(--card)_86%,transparent)] px-1.5 py-1 lg:flex"
           >
+            <div ref={convertersRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setIsConvertersOpen((current) => !current)}
+                aria-expanded={isConvertersOpen}
+                className={`${linkClass} inline-flex items-center gap-1.5`}
+              >
+                Converters
+                <ChevronDown
+                  className={`h-4 w-4 transition-transform ${
+                    isConvertersOpen ? "rotate-180" : "rotate-0"
+                  }`}
+                />
+              </button>
+              <div
+                className={`absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-2xl border bg-[var(--card)] p-1 shadow-xl transition-all duration-180 ease-out ${
+                  isConvertersOpen
+                    ? "visible translate-y-0 opacity-100"
+                    : "pointer-events-none invisible -translate-y-1 opacity-0"
+                }`}
+              >
+                {converterLinks.map((link) => {
+                  const Icon = link.icon;
+
+                  return (
+                    <a
+                      key={link.href}
+                      href={link.href}
+                      onClick={closeMenu}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]"
+                    >
+                      <Icon className="h-4 w-4 text-[var(--primary)]" />
+                      {link.label}
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
             {navLinks.map((link) => (
               <a key={link.href} href={link.href} className={linkClass}>
                 {link.label}
@@ -180,6 +250,21 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
               <UsageBadge usage={usage} />
             </div>
             <nav aria-label="Mobile navigation" className="grid gap-1">
+              {converterLinks.map((link) => {
+                const Icon = link.icon;
+
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={closeMenu}
+                    className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]"
+                  >
+                    <Icon className="h-4 w-4 text-[var(--primary)]" />
+                    {link.label}
+                  </a>
+                );
+              })}
               {navLinks.map((link) => (
                 <a
                   key={link.href}
