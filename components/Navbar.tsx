@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDown, FileImage, FileText, LogOut, Menu, Music, Video, X } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { ChevronDown, LogOut, Menu, X } from "lucide-react";
+import {
+  ConvertersMegaMenu,
+  MobileConvertersMenu,
+} from "@/components/ConvertersMegaMenu";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -16,20 +21,13 @@ type NavbarProps = {
   onLogout: () => Promise<void>;
 };
 
-const converterLinks = [
-  { label: "Image Converter", href: "/tools/image-converter", icon: FileImage },
-  { label: "Video Converter", href: "/tools/video-converter", icon: Video },
-  { label: "Document Converter", href: "/tools/document-converter", icon: FileText },
-  { label: "Audio Converter", href: "/tools/audio-converter", icon: Music },
-];
-
 const navLinks = [
   { label: "Formats", href: "#formats" },
   { label: "How it works", href: "#how-it-works" },
 ];
 
 const linkClass =
-  "rounded-full px-3.5 py-2 text-sm font-semibold text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)]";
+  "inline-flex min-h-[40px] items-center rounded-full px-3.5 py-2 text-sm font-semibold leading-none text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)]";
 
 const loginButtonClass =
   "inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]";
@@ -37,6 +35,7 @@ const signupButtonClass =
   "inline-flex items-center justify-center rounded-full border border-[var(--primary)]/35 bg-[var(--card)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-dark)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] dark:text-[var(--foreground)]";
 
 export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
+  const pathname = usePathname();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isConvertersOpen, setIsConvertersOpen] = useState(false);
@@ -142,13 +141,15 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
 
           <nav
             aria-label="Primary navigation"
-            className="hidden min-w-[360px] items-center justify-center gap-1 rounded-full border bg-[color-mix(in_srgb,var(--card)_86%,transparent)] px-1.5 py-1 lg:flex"
+            className="hidden min-w-[360px] items-center justify-center gap-1 lg:flex"
           >
             <div ref={convertersRef} className="relative">
               <button
                 type="button"
                 onClick={() => setIsConvertersOpen((current) => !current)}
                 aria-expanded={isConvertersOpen}
+                aria-controls="converters-menu"
+                aria-label="Open converters menu"
                 className={`${linkClass} inline-flex items-center gap-1.5`}
               >
                 Converters
@@ -159,27 +160,13 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
                 />
               </button>
               <div
-                className={`absolute left-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-2xl border bg-[var(--card)] p-1 shadow-xl transition-all duration-180 ease-out ${
+                className={`absolute left-1/2 top-full z-50 mt-3 -translate-x-1/2 transition-all duration-180 ease-out ${
                   isConvertersOpen
                     ? "visible translate-y-0 opacity-100"
                     : "pointer-events-none invisible -translate-y-1 opacity-0"
                 }`}
               >
-                {converterLinks.map((link) => {
-                  const Icon = link.icon;
-
-                  return (
-                    <a
-                      key={link.href}
-                      href={link.href}
-                      onClick={closeMenu}
-                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]"
-                    >
-                      <Icon className="h-4 w-4 text-[var(--primary)]" />
-                      {link.label}
-                    </a>
-                  );
-                })}
+                <ConvertersMegaMenu activeRoute={pathname} onSelect={closeMenu} />
               </div>
             </div>
             {navLinks.map((link) => (
@@ -248,21 +235,7 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
               <UsageBadge usage={usage} />
             </div>
             <nav aria-label="Mobile navigation" className="grid gap-1">
-              {converterLinks.map((link) => {
-                const Icon = link.icon;
-
-                return (
-                  <a
-                    key={link.href}
-                    href={link.href}
-                    onClick={closeMenu}
-                    className="flex items-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]"
-                  >
-                    <Icon className="h-4 w-4 text-[var(--primary)]" />
-                    {link.label}
-                  </a>
-                );
-              })}
+              <MobileConvertersMenu activeRoute={pathname} onSelect={closeMenu} />
               {navLinks.map((link) => (
                 <a
                   key={link.href}
