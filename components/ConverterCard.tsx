@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import JSZip from "jszip";
-import { LoaderCircle, ShieldCheck, Sparkles } from "lucide-react";
+import { LoaderCircle, ShieldCheck, Sparkles, X } from "lucide-react";
 import { AuthModal } from "@/components/AuthModal";
 import { BatchResultList } from "@/components/BatchResultList";
 import { ConversionHistoryList } from "@/components/ConversionHistoryList";
@@ -12,7 +12,6 @@ import { FileList } from "@/components/FileList";
 import { FormatSelector } from "@/components/FormatSelector";
 import { Navbar } from "@/components/Navbar";
 import { UploadBox } from "@/components/UploadBox";
-import { UsageBadge } from "@/components/UsageBadge";
 import { signOutUser } from "@/lib/auth";
 import {
   APP_NAME,
@@ -40,6 +39,7 @@ import {
   ConversionProgressItem,
   ConverterState,
   OutputFormat,
+  OutputOptions,
   UploadedFile,
 } from "@/types/converter";
 import { UserUsage } from "@/types/usage";
@@ -214,6 +214,19 @@ export function ConverterCard() {
   const [usageNotice, setUsageNotice] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [progressItems, setProgressItems] = useState<ConversionProgressItem[]>([]);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [widthInput, setWidthInput] = useState("");
+  const [heightInput, setHeightInput] = useState("");
+  const [fitMode, setFitMode] = useState<NonNullable<OutputOptions["fitMode"]>>("max");
+  const [stripMetadata, setStripMetadata] = useState(true);
+  const [draftWidthInput, setDraftWidthInput] = useState("");
+  const [draftHeightInput, setDraftHeightInput] = useState("");
+  const [draftFitMode, setDraftFitMode] = useState<NonNullable<OutputOptions["fitMode"]>>("max");
+  const [draftStripMetadata, setDraftStripMetadata] = useState(true);
+  const [isFitMenuOpen, setIsFitMenuOpen] = useState(false);
+  const optionsFirstFieldRef = useRef<HTMLInputElement | null>(null);
+  const optionsTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const wasOptionsOpenRef = useRef(false);
 
   function updateProgressStageForFiles(
     files: UploadedFile[],
@@ -413,6 +426,78 @@ export function ConverterCard() {
     return () => window.clearInterval(cleanupTimer);
   }, []);
 
+  useEffect(() => {
+    if (!selectedFiles.length) {
+      setIsOptionsOpen(false);
+    }
+  }, [selectedFiles.length]);
+
+  useEffect(() => {
+    if (!isOptionsOpen) {
+      setIsFitMenuOpen(false);
+    }
+  }, [isOptionsOpen]);
+
+  useEffect(() => {
+    if (!isOptionsOpen) {
+      return;
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        closeOptionsModal();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [isOptionsOpen]);
+
+  useEffect(() => {
+    if (isOptionsOpen) {
+      optionsFirstFieldRef.current?.focus();
+    }
+  }, [isOptionsOpen]);
+
+  useEffect(() => {
+    if (wasOptionsOpenRef.current && !isOptionsOpen) {
+      optionsTriggerRef.current?.focus();
+    }
+
+    wasOptionsOpenRef.current = isOptionsOpen;
+  }, [isOptionsOpen]);
+
+  function openOptionsModal(trigger?: HTMLButtonElement) {
+    if (trigger) {
+      optionsTriggerRef.current = trigger;
+    }
+    setDraftWidthInput(widthInput);
+    setDraftHeightInput(heightInput);
+    setDraftFitMode(fitMode);
+    setDraftStripMetadata(stripMetadata);
+    setIsOptionsOpen(true);
+  }
+
+  function closeOptionsModal() {
+    setIsOptionsOpen(false);
+  }
+
+  function applyOptionsAndClose() {
+    setWidthInput(draftWidthInput);
+    setHeightInput(draftHeightInput);
+    setFitMode(draftFitMode);
+    setStripMetadata(draftStripMetadata);
+    setIsFitMenuOpen(false);
+    setIsOptionsOpen(false);
+  }
+
+  function resetDraftImageOptions() {
+    setDraftWidthInput("");
+    setDraftHeightInput("");
+    setDraftFitMode("max");
+    setDraftStripMetadata(true);
+  }
+
   function openAuthModal(mode: "login" | "signup") {
     setAuthMode(mode);
     setAuthModalOpen(true);
@@ -495,10 +580,12 @@ export function ConverterCard() {
     files: UploadedFile[],
     outputFormat: OutputFormat,
     retentionMs: number,
+    outputOptions: OutputOptions,
     accessToken?: string,
   ): Promise<ConvertedFile[]> {
     const formData = new FormData();
     formData.append("outputFormat", outputFormat);
+    formData.append("outputOptions", JSON.stringify(outputOptions));
     files.forEach((file) => formData.append("files", file.file, file.name));
 
     const response = await fetch("/api/convert", {
@@ -571,6 +658,14 @@ export function ConverterCard() {
 
     const activeUsage = user ? await syncAuthenticatedUsage(user) : getGuestUsage();
     const activePolicy = getActivePolicy(activeUsage.isGuest);
+    const resolvedOutputOptions: OutputOptions = {
+      quality: 90,
+      backgroundColor: "#ffffff",
+      keepMetadata: !stripMetadata,
+      fitMode,
+      width: widthInput.trim() ? Number(widthInput) : undefined,
+      height: heightInput.trim() ? Number(heightInput) : undefined,
+    };
 
     setUsage(activeUsage);
     syncFileStatuses(activeUsage.remaining);
@@ -646,6 +741,7 @@ export function ConverterCard() {
             batch,
             outputFormat,
             activePolicy.retentionMs,
+            resolvedOutputOptions,
             accessToken,
           );
           updateProgressStageForFiles(batch, "finalizing", 90);
@@ -772,7 +868,6 @@ export function ConverterCard() {
     (file) => file.status === "over_limit",
   ).length;
   const overBatchLimit = selectedFiles.length > activePolicy.maxBatchFiles;
-  const validSelectedCount = selectedFiles.length - overLimitCount;
   const convertDisabled =
     isInitializing ||
     state.isConverting ||
@@ -804,7 +899,7 @@ export function ConverterCard() {
       />
 
       <main>
-        <section className="relative overflow-hidden px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
+        <section className="relative overflow-visible px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
           <div className="mx-auto max-w-7xl">
             <div className="mx-auto max-w-3xl text-center">
               <span className="inline-flex rounded-full border bg-[var(--card)] px-4 py-2 text-sm font-semibold text-[var(--primary)]">
@@ -830,17 +925,15 @@ export function ConverterCard() {
                       Start with your images
                     </h2>
                     <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
-                      Add one image or a small batch. We will show only the files that need attention.
+                      Upload one image or a small batch, then choose your output format.
                     </p>
                   </div>
-                  <UsageBadge usage={usage} />
                 </div>
 
                 <div className="mt-7 space-y-5">
                   {!hasSelectedFiles ? (
                     <UploadBox
                       onFilesSelected={handleFilesSelected}
-                      maxFileSizeBytes={activePolicy.maxFileSizeBytes}
                     />
                   ) : null}
 
@@ -850,7 +943,6 @@ export function ConverterCard() {
                         <UploadBox
                           onFilesSelected={handleFilesSelected}
                           compact
-                          maxFileSizeBytes={activePolicy.maxFileSizeBytes}
                         />
                       </div>
                     ) : null}
@@ -862,18 +954,22 @@ export function ConverterCard() {
                         onDownload={convertedFiles.length ? handleDownloadSingle : undefined}
                       />
                     ) : (
-                      <FileList files={selectedFiles} onRemove={handleRemoveFile} />
+                      <FileList
+                        files={selectedFiles}
+                        onRemove={handleRemoveFile}
+                        onOpenOptions={(trigger) => openOptionsModal(trigger)}
+                      />
                     )}
 
-                    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-4 sm:p-5">
-                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(280px,0.72fr)] lg:items-end">
-                        <div className="space-y-3">
+                    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-3 sm:p-3.5">
+                      <div className="grid gap-3 md:grid-cols-2 md:items-start">
+                        <div>
                           <FormatSelector value={outputFormat} onChange={setOutputFormat} />
-                          <p className="rounded-2xl border bg-[var(--card)] px-4 py-3 text-sm leading-6 text-[var(--muted-foreground)]">
-                            We keep the settings simple and choose reliable defaults for clean downloads.
-                          </p>
                         </div>
-                        <div className="space-y-3 rounded-2xl border bg-[var(--card)] p-4">
+                        <div className="space-y-1">
+                          <p className="text-sm font-semibold text-[var(--foreground)]">
+                            Convert
+                          </p>
                           {limitReached && usage?.isGuest ? (
                             <button
                               type="button"
@@ -887,35 +983,34 @@ export function ConverterCard() {
                             type="button"
                             onClick={handleConvert}
                             disabled={convertDisabled}
-                            className="inline-flex w-full items-center justify-center rounded-full bg-[#3E5F44] px-5 py-3.5 text-sm font-semibold text-white transition hover:bg-[#2F4A35] disabled:cursor-not-allowed disabled:opacity-50"
+                            className={`inline-flex min-h-[48px] w-full items-center justify-center rounded-2xl px-5 py-3 text-sm font-medium transition ${
+                              convertDisabled
+                                ? "cursor-not-allowed border border-[var(--border)] bg-[var(--background-secondary)] text-[var(--muted-foreground)] opacity-70"
+                                : "bg-[#3E5F44] text-white hover:bg-[#2F4A35]"
+                            }`}
                           >
                             {state.isConverting ? (
                               <>
                                 <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
                                 Converting...
                               </>
-                            ) : convertedFiles.length ? (
-                              "Convert again"
                             ) : !selectedFiles.length ? (
                               "Upload images first"
-                            ) : selectedFiles.length === 1 ? (
-                              "Convert image"
                             ) : (
-                              `Convert ${validSelectedCount} images`
+                              "Convert images"
                             )}
                           </button>
                           {!hasSelectedFiles ? (
-                            <p className="text-center text-sm text-[var(--muted-foreground)]">
+                            <p className="text-left text-xs leading-5 text-[var(--muted-foreground)]">
                               Upload at least one image to start.
                             </p>
                           ) : null}
-                          <p className="text-center text-xs text-[var(--muted-foreground)]">
-                            Up to {activePolicy.maxBatchFiles} images per batch -{" "}
+                          <p className="text-left text-xs leading-5 text-[var(--muted-foreground)]">
+                            Up to {activePolicy.maxBatchFiles} images per batch ·{" "}
                             {formatFileSize(activePolicy.maxFileSizeBytes)} per image
                           </p>
                         </div>
                       </div>
-
                       {exceedsLimitMessage ? (
                         <div className="mt-4 rounded-2xl border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
                           {exceedsLimitMessage}
@@ -928,18 +1023,13 @@ export function ConverterCard() {
                         </div>
                       ) : null}
 
-                      {!hasSelectedFiles ? (
-                        <div className="mt-4 rounded-2xl border border-dashed bg-[var(--card)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
-                          Start by adding an image, then choose the format you want back.
-                        </div>
-                      ) : null}
                     </div>
 
-                    <div className="flex gap-3 rounded-[1.25rem] border bg-[var(--card-muted)] p-4 text-sm text-[var(--muted-foreground)]">
+                    <div className="flex gap-3 rounded-[1.25rem] border bg-[var(--card-muted)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
                       <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary)]" />
                       <p className="leading-6">
-                        Files are processed temporarily. Guest downloads expire after 1 hour,
-                        and logged-in history keeps the last 20 conversions for 24 hours.
+                        Files are processed temporarily. Guest downloads expire after 1 hour.
+                        Logged-in history keeps the last 20 conversions for 24 hours.
                       </p>
                     </div>
                   </div>
@@ -985,6 +1075,183 @@ export function ConverterCard() {
         mode={authMode}
         onClose={() => setAuthModalOpen(false)}
       />
+      {hasSelectedFiles && isOptionsOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--foreground)_35%,transparent)] p-4 animate-[options-fade_180ms_ease-out]"
+          onClick={closeOptionsModal}
+          role="presentation"
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Advanced conversion options"
+            onClick={(event) => event.stopPropagation()}
+            className="flex w-full max-w-3xl flex-col overflow-visible rounded-2xl border bg-[var(--card)] shadow-[0_12px_36px_rgba(20,40,30,0.14)] animate-[options-pop_180ms_ease-out]"
+          >
+            <div className="border-b px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[var(--foreground)]">Image options</p>
+                  <p className="mt-0.5 text-xs text-[var(--muted-foreground)]">
+                    Adjust size, fit, and privacy settings before converting.
+                  </p>
+                </div>
+              <button
+                type="button"
+                onClick={closeOptionsModal}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--card-muted)] text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:shadow-none"
+                aria-label="Close image options"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              </div>
+            </div>
+            <div className="p-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">
+                  Width (px)
+                </span>
+                <input
+                  ref={optionsFirstFieldRef}
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={draftWidthInput}
+                  onChange={(event) =>
+                    setDraftWidthInput(event.target.value.replace(/[^\d]/g, ""))
+                  }
+                  placeholder="Auto width"
+                  className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus:outline-none focus-visible:outline-none focus-visible:shadow-none"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">
+                  Height (px)
+                </span>
+                <input
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  value={draftHeightInput}
+                  onChange={(event) =>
+                    setDraftHeightInput(event.target.value.replace(/[^\d]/g, ""))
+                  }
+                  placeholder="Auto height"
+                  className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus:outline-none focus-visible:outline-none focus-visible:shadow-none"
+                />
+              </label>
+              </div>
+              <p className="mt-2 text-xs text-[var(--muted-foreground)]">
+                Leave empty to keep the original size.
+              </p>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="space-y-1">
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">
+                  Fit
+                </span>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsFitMenuOpen((current) => !current)}
+                    className={`flex min-h-10 w-full items-center justify-between rounded-xl border bg-[var(--card-muted)] px-3 text-left text-sm text-[var(--foreground)] transition ${
+                      isFitMenuOpen ? "border-[var(--primary)]" : "border-[var(--border)]"
+                    }`}
+                    aria-expanded={isFitMenuOpen}
+                    aria-haspopup="listbox"
+                  >
+                    <span>
+                      {draftFitMode === "max" ? "Max size" : draftFitMode === "crop" ? "Cover" : "Stretch"}
+                    </span>
+                    <span className="text-xs text-[var(--muted-foreground)]">▼</span>
+                  </button>
+                  <div
+                    className={`absolute left-0 top-full z-40 mt-1 w-full overflow-hidden rounded-xl border bg-[var(--card)] shadow-lg transition-all duration-180 ease-out ${
+                      isFitMenuOpen
+                        ? "visible translate-y-0 opacity-100"
+                        : "pointer-events-none invisible -translate-y-1 opacity-0"
+                    }`}
+                    role="listbox"
+                    aria-label="Fit mode"
+                  >
+                    {[
+                      { value: "max", label: "Max size" },
+                      { value: "crop", label: "Cover" },
+                      { value: "scale", label: "Stretch" },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setDraftFitMode(option.value as NonNullable<OutputOptions["fitMode"]>);
+                          setIsFitMenuOpen(false);
+                        }}
+                        className={`block w-full px-3 py-2 text-left text-sm transition ${
+                          draftFitMode === option.value
+                            ? "bg-[var(--background-secondary)] text-[var(--foreground)]"
+                            : "text-[var(--foreground)] hover:bg-[var(--card-muted)]"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  {draftFitMode === "max"
+                    ? "Max size: Resize within the given width and height."
+                    : draftFitMode === "crop"
+                      ? "Cover: Fill the size and crop if needed."
+                      : "Stretch: Force exact width and height."}
+                </p>
+              </label>
+              <div className="space-y-1">
+                <span className="text-xs font-medium text-[var(--muted-foreground)]">
+                  Remove metadata
+                </span>
+                <div className="flex min-h-10 items-center gap-4 rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)]">
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="strip-metadata"
+                      checked={draftStripMetadata}
+                      onChange={() => setDraftStripMetadata(true)}
+                    />
+                    Yes
+                  </label>
+                  <label className="inline-flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="strip-metadata"
+                      checked={!draftStripMetadata}
+                      onChange={() => setDraftStripMetadata(false)}
+                    />
+                    No
+                  </label>
+                </div>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Removes hidden camera, location, and device info.
+                </p>
+              </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t px-4 py-3">
+              <button
+                type="button"
+                onClick={resetDraftImageOptions}
+                className="rounded-xl border bg-[var(--card)] px-3.5 py-2 text-sm font-medium text-[var(--muted-foreground)] transition hover:border-[var(--primary)] hover:text-[var(--foreground)]"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={applyOptionsAndClose}
+                className="rounded-xl bg-[#3E5F44] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2F4A35]"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

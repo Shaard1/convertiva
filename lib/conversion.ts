@@ -28,6 +28,8 @@ function buildTransformer(format: OutputFormat): SharpTransformer | null {
         image
           .flatten({ background: options.backgroundColor })
           .jpeg({ quality: options.quality });
+    case "pdf":
+      return null;
     case "tiff":
       return (image, options) => image.tiff({ quality: options.quality });
     case "webp":
@@ -36,11 +38,17 @@ function buildTransformer(format: OutputFormat): SharpTransformer | null {
 }
 
 function applyCommonOptions(image: sharp.Sharp, options: OutputOptions): sharp.Sharp {
+  const fit =
+    options.fitMode === "crop"
+      ? "cover"
+      : options.fitMode === "scale"
+        ? "fill"
+        : "inside";
   const resized =
     options.width || options.height
       ? image.resize(options.width, options.height, {
-          fit: "inside",
-          withoutEnlargement: true,
+          fit,
+          withoutEnlargement: fit === "inside",
         })
       : image;
 
@@ -108,6 +116,83 @@ function encodeIcoFromPng(png: Buffer, width: number, height: number): Buffer {
   return Buffer.concat([header, directoryEntry, png]);
 }
 
+function createPdfObject(id: number, content: Buffer | string): Buffer {
+  const body = Buffer.isBuffer(content) ? content : Buffer.from(content, "binary");
+
+  return Buffer.concat([
+    Buffer.from(`${id} 0 obj\n`, "ascii"),
+    body,
+    Buffer.from("\nendobj\n", "ascii"),
+  ]);
+}
+
+function encodePdfFromJpeg(jpeg: Buffer, width: number, height: number): Buffer {
+  const objects = [
+    createPdfObject(1, "<< /Type /Catalog /Pages 2 0 R >>"),
+    createPdfObject(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>"),
+    createPdfObject(
+      3,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>`,
+    ),
+    createPdfObject(
+      4,
+      Buffer.concat([
+        Buffer.from(
+          `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpeg.length} >>\nstream\n`,
+          "ascii",
+        ),
+        jpeg,
+        Buffer.from("\nendstream", "ascii"),
+      ]),
+    ),
+  ];
+  const contentStream = Buffer.from(
+    `q\n${width} 0 0 ${height} 0 0 cm\n/Im0 Do\nQ\n`,
+    "ascii",
+  );
+  objects.push(
+    createPdfObject(
+      5,
+      Buffer.concat([
+        Buffer.from(`<< /Length ${contentStream.length} >>\nstream\n`, "ascii"),
+        contentStream,
+        Buffer.from("endstream", "ascii"),
+      ]),
+    ),
+  );
+
+  const header = Buffer.from("%PDF-1.4\n%\xFF\xFF\xFF\xFF\n", "binary");
+  const offsets: number[] = [0];
+  let offset = header.length;
+
+  objects.forEach((object) => {
+    offsets.push(offset);
+    offset += object.length;
+  });
+
+  const xrefOffset = offset;
+  const xrefLines = [
+    "xref",
+    `0 ${objects.length + 1}`,
+    "0000000000 65535 f ",
+    ...offsets.slice(1).map((objectOffset) =>
+      `${objectOffset.toString().padStart(10, "0")} 00000 n `,
+    ),
+    "trailer",
+    `<< /Size ${objects.length + 1} /Root 1 0 R >>`,
+    "startxref",
+    String(xrefOffset),
+    "%%EOF",
+    "",
+  ];
+
+  return Buffer.concat([
+    header,
+    ...objects,
+    Buffer.from(xrefLines.join("\n"), "ascii"),
+  ]);
+}
+
 export function createUniqueOutputName(
   fileName: string,
   format: OutputFormat,
@@ -169,6 +254,15 @@ export async function convertImageBuffer(
       .toBuffer({ resolveWithObject: true });
 
     return encodeBmpFromRgba(data, info.width, info.height);
+  }
+
+  if (outputFormat === "pdf") {
+    const { data, info } = await image
+      .flatten({ background: options.backgroundColor })
+      .jpeg({ quality: options.quality })
+      .toBuffer({ resolveWithObject: true });
+
+    return encodePdfFromJpeg(data, info.width, info.height);
   }
 
   const { data, info } = await image

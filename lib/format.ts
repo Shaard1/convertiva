@@ -35,6 +35,8 @@ export function getOutputMimeType(format: OutputFormat): string {
       return "image/png";
     case "jpg":
       return "image/jpeg";
+    case "pdf":
+      return "application/pdf";
     case "tiff":
       return "image/tiff";
     case "webp":
@@ -67,6 +69,8 @@ export function getFileFormatLabel(fileName: string): string {
       return "JFIF";
     case "png":
       return "PNG";
+    case "pdf":
+      return "PDF";
     case "tif":
     case "tiff":
       return "TIFF";

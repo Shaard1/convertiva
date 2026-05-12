@@ -36,6 +36,7 @@ export const SUPPORTED_OUTPUT_FORMATS: OutputFormat[] = [
   "gif",
   "ico",
   "jpg",
+  "pdf",
   "png",
   "tiff",
   "webp",

@@ -5,15 +5,21 @@ import { UploadedFile } from "@/types/converter";
 type FileListProps = {
   files: UploadedFile[];
   onRemove: (fileId: string) => void;
+  onOpenOptions?: (trigger: HTMLButtonElement) => void;
 };
 
-export function FileList({ files, onRemove }: FileListProps) {
+export function FileList({ files, onRemove, onOpenOptions }: FileListProps) {
   if (!files.length) {
     return null;
   }
 
   return (
     <div className="space-y-3" aria-label="Selected files">
+      <div className="flex items-center justify-between rounded-2xl border bg-[var(--card-muted)] px-4 py-3">
+        <p className="text-sm font-semibold text-[var(--foreground)]">
+          {files.length} image{files.length === 1 ? "" : "s"} selected
+        </p>
+      </div>
       {files.map((file) => (
         <div
           key={file.id}
@@ -72,15 +78,26 @@ export function FileList({ files, onRemove }: FileListProps) {
             ) : null}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => onRemove(file.id)}
-            aria-label={`Remove ${file.name}`}
-            className="inline-flex items-center justify-center gap-2 self-start rounded-full border bg-[var(--card)] px-3 py-2 text-xs font-medium text-[var(--muted-foreground)] transition hover:border-[var(--danger)] hover:text-[var(--danger)] sm:self-auto"
-          >
-            <Trash2 className="h-4 w-4" />
-            Remove
-          </button>
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {onOpenOptions ? (
+              <button
+                type="button"
+                onClick={(event) => onOpenOptions(event.currentTarget)}
+                className="inline-flex items-center justify-center gap-2 rounded-full border bg-[var(--card)] px-3 py-2 text-xs font-medium text-[var(--muted-foreground)] transition hover:border-[var(--primary)] hover:text-[var(--foreground)]"
+              >
+                Options
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => onRemove(file.id)}
+              aria-label={`Remove ${file.name}`}
+              className="inline-flex items-center justify-center gap-2 rounded-full border bg-[var(--card)] px-3 py-2 text-xs font-medium text-[var(--muted-foreground)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
+            >
+              <Trash2 className="h-4 w-4" />
+              Remove
+            </button>
+          </div>
         </div>
       ))}
     </div>

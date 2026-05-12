@@ -4,6 +4,7 @@ export type OutputFormat =
   | "gif"
   | "ico"
   | "jpg"
+  | "pdf"
   | "png"
   | "tiff"
   | "webp";
@@ -12,6 +13,7 @@ export type OutputOptions = {
   quality: number;
   width?: number;
   height?: number;
+  fitMode?: "max" | "crop" | "scale";
   keepMetadata: boolean;
   backgroundColor: string;
 };

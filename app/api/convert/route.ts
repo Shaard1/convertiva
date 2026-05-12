@@ -55,7 +55,43 @@ const DEFAULT_OUTPUT_OPTIONS: OutputOptions = {
   quality: 90,
   keepMetadata: false,
   backgroundColor: "#ffffff",
+  fitMode: "max",
 };
+
+function parseOutputOptions(value: FormDataEntryValue | null): OutputOptions {
+  if (!value || typeof value !== "string") {
+    return DEFAULT_OUTPUT_OPTIONS;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Partial<OutputOptions>;
+    const width =
+      typeof parsed.width === "number" && Number.isFinite(parsed.width)
+        ? Math.max(1, Math.min(10_000, Math.floor(parsed.width)))
+        : undefined;
+    const height =
+      typeof parsed.height === "number" && Number.isFinite(parsed.height)
+        ? Math.max(1, Math.min(10_000, Math.floor(parsed.height)))
+        : undefined;
+    const fitMode =
+      parsed.fitMode === "max" || parsed.fitMode === "crop" || parsed.fitMode === "scale"
+        ? parsed.fitMode
+        : DEFAULT_OUTPUT_OPTIONS.fitMode;
+
+    return {
+      ...DEFAULT_OUTPUT_OPTIONS,
+      width,
+      height,
+      keepMetadata:
+        typeof parsed.keepMetadata === "boolean"
+          ? parsed.keepMetadata
+          : DEFAULT_OUTPUT_OPTIONS.keepMetadata,
+      fitMode,
+    };
+  } catch {
+    return DEFAULT_OUTPUT_OPTIONS;
+  }
+}
 
 class RequestValidationError extends Error {
   constructor(
@@ -437,6 +473,7 @@ export async function POST(request: Request) {
 
     const formData = await request.formData();
     const outputFormat = formData.get("outputFormat");
+    const outputOptions = parseOutputOptions(formData.get("outputOptions"));
     const entries = formData.getAll("files");
 
     if (!outputFormat || typeof outputFormat !== "string" || !isOutputFormat(outputFormat)) {
@@ -463,7 +500,7 @@ export async function POST(request: Request) {
         policy.maxConcurrentConversions,
         (file) =>
           withTimeout(
-            convertUploadedFile(file, outputFormat, DEFAULT_OUTPUT_OPTIONS, usedNames),
+            convertUploadedFile(file, outputFormat, outputOptions, usedNames),
             policy.processingTimeoutMs,
             "Image processing timed out.",
           ),

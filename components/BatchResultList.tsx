@@ -64,11 +64,11 @@ export function BatchResultList({
                 {formatFileSize(file.size)}
               </p>
             </div>
-            <div className="flex flex-wrap gap-2 sm:shrink-0 sm:justify-end">
+            <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
               <a
                 href={file.downloadUrl}
                 download={file.fileName}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-[#3E5F44] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#2F4A35]"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[var(--primary)] bg-[var(--primary-dark)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2F4A35]"
               >
                 <Download className="h-4 w-4" />
                 Download
@@ -77,7 +77,7 @@ export function BatchResultList({
                 type="button"
                 onClick={() => onRemove(file.id)}
                 aria-label={`Remove ${file.fileName} from downloads`}
-                className="inline-flex items-center justify-center gap-2 rounded-full border bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[var(--muted-foreground)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border bg-[var(--card)] px-4 py-2.5 text-sm font-medium text-[var(--muted-foreground)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
               >
                 <X className="h-4 w-4" />
                 Remove
