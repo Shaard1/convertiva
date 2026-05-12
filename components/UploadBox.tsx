@@ -228,9 +228,6 @@ export function UploadBox({
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
             or drop your files here.
           </p>
-          <p className="mx-auto mt-2 max-w-xl text-xs leading-5 text-[var(--muted-foreground)]">
-            Supports: JPG, PNG, WEBP, AVIF, GIF, BMP, TIFF, ICO
-          </p>
           <div className="relative mx-auto mt-5 inline-block text-left">
             <button
               type="button"

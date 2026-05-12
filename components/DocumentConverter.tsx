@@ -308,9 +308,6 @@ export function DocumentConverter() {
                   <p className="mt-2 text-sm text-[var(--muted-foreground)]">
                     or drop your file here.
                   </p>
-                  <p className="mx-auto mt-2 max-w-xl text-xs leading-5 text-[var(--muted-foreground)]">
-                    Supports: PDF, DOCX, DOC, TXT, RTF, ODT, HTML, MD, and more
-                  </p>
                   <button
                     type="button"
                     onClick={() => inputRef.current?.click()}

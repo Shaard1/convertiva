@@ -391,9 +391,6 @@ export function AudioConverter() {
                   <p className="mt-2 text-sm text-[var(--muted-foreground)]">
                     or drop your file here.
                   </p>
-                  <p className="mx-auto mt-2 max-w-xl text-xs leading-5 text-[var(--muted-foreground)]">
-                    Supports: MP3, WAV, M4A, FLAC, AAC, OPUS, WMA, and more
-                  </p>
                   <button
                     type="button"
                     onClick={() => inputRef.current?.click()}

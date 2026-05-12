@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { ChevronDown, FileImage, FileText, LogOut, Menu, Music, Video, X } from "lucide-react";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
@@ -30,8 +31,6 @@ const navLinks = [
 const linkClass =
   "rounded-full px-3.5 py-2 text-sm font-semibold text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)]";
 
-const convertButtonClass =
-  "inline-flex items-center justify-center rounded-full bg-[#3E5F44] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#2F4A35]";
 const loginButtonClass =
   "inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]";
 const signupButtonClass =
@@ -115,8 +114,8 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
     >
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="flex min-h-[68px] items-center justify-between gap-3">
-          <a
-            href="/tools/image-converter"
+          <Link
+            href="/"
             onClick={closeMenu}
             className="flex min-w-0 items-center gap-3 rounded-full pr-2 transition"
             aria-label="Convertly home"
@@ -136,14 +135,14 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
                 Convertly
               </span>
               <span className="mt-0.5 hidden text-[11px] font-medium text-[#6F786F] dark:text-[var(--muted-foreground)] sm:block">
-                Easy file conversion
+                by Jaiidonee
               </span>
             </span>
-          </a>
+          </Link>
 
           <nav
             aria-label="Primary navigation"
-            className="hidden items-center gap-1 rounded-full border bg-[color-mix(in_srgb,var(--card)_86%,transparent)] px-1.5 py-1 lg:flex"
+            className="hidden min-w-[360px] items-center justify-center gap-1 rounded-full border bg-[color-mix(in_srgb,var(--card)_86%,transparent)] px-1.5 py-1 lg:flex"
           >
             <div ref={convertersRef} className="relative">
               <button
@@ -195,9 +194,6 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
               <UsageBadge usage={usage} />
             </div>
             <ThemeToggle />
-            <a href="#converter" className={`${convertButtonClass} hidden md:inline-flex`}>
-              Convert now
-            </a>
             {showAuthenticatedActions ? (
               <button
                 type="button"
@@ -280,10 +276,6 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             </nav>
 
             <div className="mt-3 grid gap-3 border-t pt-3">
-              <a href="#converter" onClick={closeMenu} className={convertButtonClass}>
-                Convert now
-              </a>
-
               {showAuthenticatedActions ? (
                 <button
                   type="button"
