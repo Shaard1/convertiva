@@ -7,6 +7,7 @@ import {
 } from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const formData = await request.formData();
@@ -35,9 +36,13 @@ export async function POST(request: Request) {
     });
 
     await page.goto(websiteUrl.toString(), {
-      waitUntil: "networkidle",
-      timeout: 30_000,
+      waitUntil: "domcontentloaded",
+      timeout: 15_000,
     });
+
+    await page
+      .waitForLoadState("load", { timeout: 5_000 })
+      .catch(() => undefined);
 
     const screenshot = await page.screenshot({
       fullPage: true,
@@ -47,7 +52,12 @@ export async function POST(request: Request) {
     return new Response(new Uint8Array(screenshot), {
       headers: createDownloadHeaders("website-screenshot.png", "image/png"),
     });
-  } catch {
+  } catch (error) {
+    console.error("Website screenshot failed", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      url: websiteUrl.toString(),
+    });
+
     return buildToolErrorResponse("The website could not be captured. Try another public URL.", 500);
   } finally {
     await browser.close();

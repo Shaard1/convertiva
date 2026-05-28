@@ -7,6 +7,7 @@ import {
 } from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(request: Request) {
   const formData = await request.formData();
@@ -35,9 +36,13 @@ export async function POST(request: Request) {
     });
 
     await page.goto(websiteUrl.toString(), {
-      waitUntil: "networkidle",
-      timeout: 30_000,
+      waitUntil: "domcontentloaded",
+      timeout: 15_000,
     });
+
+    await page
+      .waitForLoadState("load", { timeout: 5_000 })
+      .catch(() => undefined);
 
     const pdf = await page.pdf({
       format: "A4",
@@ -53,7 +58,12 @@ export async function POST(request: Request) {
     return new Response(new Uint8Array(pdf), {
       headers: createDownloadHeaders("website.pdf", "application/pdf"),
     });
-  } catch {
+  } catch (error) {
+    console.error("Website PDF export failed", {
+      message: error instanceof Error ? error.message : "Unknown error",
+      url: websiteUrl.toString(),
+    });
+
     return buildToolErrorResponse("The website could not be exported as a PDF. Try another public URL.", 500);
   } finally {
     await browser.close();
