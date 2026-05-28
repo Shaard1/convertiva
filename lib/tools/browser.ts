@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
 import { isIP } from "node:net";
+import chromium from "@sparticuz/chromium";
+import type { LaunchOptions } from "playwright-core";
 
 const browserCandidates = [
   "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
@@ -60,4 +62,25 @@ export function getBrowserExecutablePath() {
   }
 
   return executablePath;
+}
+
+export async function getBrowserLaunchOptions(): Promise<LaunchOptions> {
+  if (process.env.VERCEL) {
+    const executablePath = await chromium.executablePath();
+
+    if (!executablePath) {
+      throw new Error("No supported browser executable was found on the server.");
+    }
+
+    return {
+      args: chromium.args,
+      executablePath,
+      headless: true,
+    };
+  }
+
+  return {
+    executablePath: getBrowserExecutablePath(),
+    headless: true,
+  };
 }

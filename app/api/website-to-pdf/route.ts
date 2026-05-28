@@ -1,5 +1,5 @@
 import { chromium } from "playwright-core";
-import { getBrowserExecutablePath, validateScreenshotUrl } from "@/lib/tools/browser";
+import { getBrowserLaunchOptions, validateScreenshotUrl } from "@/lib/tools/browser";
 import {
   buildToolErrorResponse,
   createDownloadHeaders,
@@ -26,10 +26,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const browser = await chromium.launch({
-    executablePath: getBrowserExecutablePath(),
-    headless: true,
-  });
+  const browser = await chromium.launch(await getBrowserLaunchOptions());
 
   try {
     const page = await browser.newPage({
