@@ -1,5 +1,5 @@
 import { Scale } from "lucide-react";
-import { SitePageShell } from "@/components/SitePageShell";
+import { LegalPage, type LegalSection } from "@/components/LegalPage";
 
 const sections = [
   ["1. Agreement", "By accessing or using Convertiva, you agree to these terms. If you do not agree, do not use the service. If you use Convertiva for an organization, you confirm that you are authorized to accept these terms for it."],
@@ -14,6 +14,18 @@ const sections = [
   ["10. Disclaimer and liability", "To the extent permitted by law, the service is provided without warranties of uninterrupted operation, fitness for a particular purpose, or error-free results. The operator is not responsible for lost files, lost profits, indirect damages, or reliance on an inaccurate conversion. Rights that cannot legally be excluded remain unaffected."],
   ["11. Suspension and termination", "Access may be suspended or terminated for misuse, security risk, legal requirements, prolonged inactivity, or material violation of these terms. You may stop using the service at any time and request account deletion through the Contact page."],
   ["12. Changes and contact", "These terms may be revised as the service changes. The effective date should be updated when revisions are published. Questions about these terms can be sent through the Contact page."],
-];
+] as const satisfies readonly LegalSection[];
 
-export default function TermsPage() { return <SitePageShell><section className="legal-hero"><div className="editorial-wrap"><p className="eyebrow"><Scale className="h-4 w-4" /> Terms of use</p><h1>Clear rules for a practical tool.</h1><p>These terms explain what you can expect from Convertiva and what we ask from everyone using it.</p></div></section><section className="legal-body"><div className="legal-wrap"><aside><p>Effective September 6, 2026</p><nav aria-label="Terms contents">{sections.map(([title]) => <a href={`#term-${title.slice(0, 2).trim()}`} key={title}>{title}</a>)}</nav></aside><div className="legal-sections">{sections.map(([title, body]) => <section id={`term-${title.slice(0, 2).trim()}`} key={title}><h2>{title}</h2><p>{body}</p></section>)}</div></div></section></SitePageShell>; }
+export default function TermsPage() {
+  return (
+    <LegalPage
+      description="These terms explain what you can expect from Convertiva and what we ask from everyone using it."
+      effectiveDate="September 6, 2026"
+      eyebrow="Terms of use"
+      eyebrowIcon={Scale}
+      idPrefix="terms"
+      sections={sections}
+      title="Clear rules for a practical tool."
+    />
+  );
+}

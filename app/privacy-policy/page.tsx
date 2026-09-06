@@ -1,5 +1,5 @@
 import { Database, FileClock, LockKeyhole } from "lucide-react";
-import { SitePageShell } from "@/components/SitePageShell";
+import { LegalPage, type LegalSection } from "@/components/LegalPage";
 
 const sections = [
   ["1. Information we process", "When you use Convertiva, we may process files or public website URLs you submit, conversion settings, output files, technical request information, and usage counts. If you create an account, we process your email address, authentication identifiers, and session information. We do not ask you to include personal information inside uploaded files."],
@@ -12,8 +12,25 @@ const sections = [
   ["8. Your choices and rights", "You may use supported guest features without creating an account. You can clear local browser data through your browser controls. Depending on your location, you may have rights to request access, correction, deletion, restriction, portability, or objection concerning personal data associated with your account."],
   ["9. Children", "Convertiva is a general-purpose utility and is not directed to children under 13. Do not use the service to submit children’s personal data without appropriate authority and safeguards."],
   ["10. Changes and contact", "We may update this notice when the service, providers, or legal requirements change. Material updates should be reflected by a revised effective date. For privacy requests, use the Contact page and clearly label the request as a privacy matter."],
-];
+] as const satisfies readonly LegalSection[];
 
-export default function PrivacyPage() { return <SitePageShell><LegalHero eyebrow="Privacy policy" title="Privacy should be understandable." description="This notice explains what Convertiva processes when you upload, convert, download, or sign in." /><section className="legal-body"><div className="legal-wrap"><aside><p>Effective September 6, 2026</p><nav aria-label="Privacy policy contents">{sections.map(([title]) => <a href={`#${title.slice(0, 2).trim()}`} key={title}>{title}</a>)}</nav></aside><div className="legal-sections">{sections.map(([title, body]) => <section id={title.slice(0, 2).trim()} key={title}><h2>{title}</h2><p>{body}</p></section>)}</div></div></section></SitePageShell>; }
+const facts = [
+  { icon: FileClock, label: "1-hour guest retention" },
+  { icon: Database, label: "24-hour account history" },
+  { icon: LockKeyhole, label: "Purpose-limited processing" },
+] as const;
 
-function LegalHero({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <section className="legal-hero"><div className="editorial-wrap"><p className="eyebrow"><LockKeyhole className="h-4 w-4" /> {eyebrow}</p><h1>{title}</h1><p>{description}</p><div className="legal-facts"><span><FileClock />1-hour guest retention</span><span><Database />24-hour account history</span><span><LockKeyhole />Purpose-limited processing</span></div></div></section>; }
+export default function PrivacyPage() {
+  return (
+    <LegalPage
+      description="This notice explains what Convertiva processes when you upload, convert, download, or sign in."
+      effectiveDate="September 6, 2026"
+      eyebrow="Privacy policy"
+      eyebrowIcon={LockKeyhole}
+      facts={facts}
+      idPrefix="privacy"
+      sections={sections}
+      title="Privacy should be understandable."
+    />
+  );
+}
