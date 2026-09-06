@@ -7,6 +7,13 @@ export type ConversionEngineName =
   | "libreoffice"
   | "sevenzip";
 
+export type ConversionToolName =
+  | "image"
+  | "video"
+  | "audio"
+  | "document"
+  | "archive";
+
 export type ConversionJobStatus =
   | "queued"
   | "processing"
@@ -17,11 +24,12 @@ export type ConversionTaskOperation = "convert";
 
 export type ConversionTaskRequest = {
   operation: ConversionTaskOperation;
+  tool?: ConversionToolName;
   input?: string | string[];
   input_format?: string;
-  output_format: OutputFormat;
+  output_format: OutputFormat | string;
   engine?: ConversionEngineName;
-  options?: Partial<OutputOptions>;
+  options?: Partial<OutputOptions> & Record<string, unknown>;
 };
 
 export type ConversionJobRequest = {

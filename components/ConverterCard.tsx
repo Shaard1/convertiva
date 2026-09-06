@@ -897,11 +897,11 @@ export function ConverterCard() {
         onLogout={handleLogout}
       />
 
-      <main>
-        <section className="relative overflow-visible px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
-          <div className="mx-auto max-w-4xl">
+      <main className="converter-page" data-tool-kind="image">
+        <section className="converter-stage relative overflow-visible px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
+          <div className="converter-frame mx-auto max-w-7xl">
             <div id="converter" className="converter-spotlight scroll-mt-28">
-              <div className="card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
+              <div className="converter-shell card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">

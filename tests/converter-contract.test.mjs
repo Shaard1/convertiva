@@ -13,10 +13,24 @@ const jobDownloadRouteSource = await readFile(
   "utf8",
 );
 const workerRouteSource = await readFile("app/api/v1/workers/process/route.ts", "utf8");
+const workerClaimRouteSource = await readFile("app/api/v1/workers/claim/route.ts", "utf8");
+const workerInputRouteSource = await readFile(
+  "app/api/v1/workers/jobs/[jobId]/inputs/[fileId]/route.ts",
+  "utf8",
+);
+const workerOutputRouteSource = await readFile(
+  "app/api/v1/workers/jobs/[jobId]/outputs/route.ts",
+  "utf8",
+);
+const workerFailRouteSource = await readFile(
+  "app/api/v1/workers/jobs/[jobId]/fail/route.ts",
+  "utf8",
+);
 const operationsRouteSource = await readFile("app/api/v1/operations/route.ts", "utf8");
 const apiKeySource = await readFile("lib/api-keys.ts", "utf8");
 const jobServiceSource = await readFile("lib/conversion-jobs.ts", "utf8");
 const engineRegistrySource = await readFile("lib/conversion-engines.ts", "utf8");
+const workerAuthSource = await readFile("lib/worker-auth.ts", "utf8");
 const supabaseSetupSource = await readFile("supabase/setup.sql", "utf8");
 
 test("limits match the requested guest and logged-in plans", () => {
@@ -56,12 +70,26 @@ test("v1 conversion platform exposes job-oriented API routes", () => {
   assert.match(jobStatusRouteSource, /getConversionJob/);
   assert.match(jobDownloadRouteSource, /getConversionJobOutputs/);
   assert.match(workerRouteSource, /processNextQueuedConversionJob/);
+  assert.match(workerClaimRouteSource, /claimNextWorkerConversionJob/);
+  assert.match(workerInputRouteSource, /getWorkerJobInputFile/);
+  assert.match(workerOutputRouteSource, /completeWorkerConversionJob/);
+  assert.match(workerFailRouteSource, /failWorkerConversionJob/);
   assert.match(operationsRouteSource, /listConversionEngines/);
 });
 
 test("v1 jobs use an engine registry and do not expose output buffers in metadata", () => {
   assert.match(engineRegistrySource, /name:\s*"sharp"/);
+  assert.match(engineRegistrySource, /name:\s*"ffmpeg"/);
+  assert.match(engineRegistrySource, /name:\s*"libreoffice"/);
+  assert.match(engineRegistrySource, /name:\s*"sevenzip"/);
+  assert.match(engineRegistrySource, /isWorkerConversionEngine/);
   assert.match(engineRegistrySource, /getConversionEngine/);
+  assert.match(jobServiceSource, /toolConversionConfigs/);
+  assert.match(jobServiceSource, /getConversionTool/);
+  assert.match(jobServiceSource, /This conversion requires queued worker processing/);
+  assert.match(jobServiceSource, /claimNextWorkerConversionJob/);
+  assert.match(jobServiceSource, /completeWorkerConversionJob/);
+  assert.match(jobServiceSource, /failWorkerConversionJob/);
   assert.match(jobServiceSource, /status:\s*"queued"/);
   assert.match(jobServiceSource, /status = "processing"/);
   assert.match(jobServiceSource, /status = "finished"/);
@@ -72,6 +100,16 @@ test("v1 jobs use an engine registry and do not expose output buffers in metadat
   assert.match(jobServiceSource, /recordUsageEvent/);
   assert.match(jobServiceSource, /downloadUrl/);
   assert.doesNotMatch(jobServiceSource, /buffer:\s*output\.buffer/);
+});
+
+test("v1 operations advertise tool-specific output formats and worker engines", () => {
+  assert.match(operationsRouteSource, /image:\s*SUPPORTED_OUTPUT_FORMATS/);
+  assert.match(operationsRouteSource, /video:\s*videoFormats/);
+  assert.match(operationsRouteSource, /audio:\s*audioFormats/);
+  assert.match(operationsRouteSource, /document:\s*documentFormats/);
+  assert.match(operationsRouteSource, /archive:\s*\["zip",\s*"7z",\s*"tar"\]/);
+  assert.match(engineRegistrySource, /mode:\s*"worker"/);
+  assert.match(engineRegistrySource, /tools:\s*\["video",\s*"audio"\]/);
 });
 
 test("v1 platform persistence schema matches the job service", () => {
@@ -103,8 +141,13 @@ test("v1 platform API keys are hashed and required by job routes", () => {
 });
 
 test("v1 worker endpoint is protected for production processing", () => {
-  assert.match(workerRouteSource, /CONVERSION_WORKER_SECRET/);
-  assert.match(workerRouteSource, /authorization/);
-  assert.match(workerRouteSource, /x-worker-secret/);
-  assert.match(workerRouteSource, /Worker authorization failed/);
+  assert.match(workerAuthSource, /CONVERSION_WORKER_SECRET/);
+  assert.match(workerAuthSource, /authorization/);
+  assert.match(workerAuthSource, /x-worker-secret/);
+  assert.match(workerAuthSource, /Worker authorization failed/);
+  assert.match(workerRouteSource, /isAuthorizedWorkerRequest/);
+  assert.match(workerClaimRouteSource, /isAuthorizedWorkerRequest/);
+  assert.match(workerInputRouteSource, /isAuthorizedWorkerRequest/);
+  assert.match(workerOutputRouteSource, /isAuthorizedWorkerRequest/);
+  assert.match(workerFailRouteSource, /isAuthorizedWorkerRequest/);
 });

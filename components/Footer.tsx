@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
+import { ArrowUpRight, ShieldCheck } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
 
 type FooterLink = {
@@ -13,12 +14,12 @@ const converterLinks: FooterLink[] = [
   { label: "Video Converter", href: "/tools/video-converter" },
   { label: "Audio Converter", href: "/tools/audio-converter" },
   { label: "Document Converter", href: "/tools/document-converter" },
-  { label: "All converters", href: "/#formats" },
+  { label: "All converters", href: "/formats" },
 ];
 
 const resourceLinks: FooterLink[] = [
-  { label: "Formats", href: "/#formats" },
-  { label: "How it works", href: "/#how-it-works" },
+  { label: "Formats", href: "/formats" },
+  { label: "How it works", href: "/how-it-works" },
   { label: "Pricing", href: "/pricing" },
   { label: "Help", href: "/help" },
 ];
@@ -36,7 +37,14 @@ export function Footer() {
   return (
     <footer className="border-t border-[var(--border)]/80 bg-[color:color-mix(in_srgb,var(--card)_78%,transparent)] backdrop-blur-sm">
       <div className="mx-auto max-w-7xl px-6 py-10 sm:py-12">
-        <div className="grid gap-7 md:grid-cols-2 xl:grid-cols-[1.7fr_1fr_1fr_1fr]">
+        <div className="footer-cta mb-14 grid gap-7 rounded-[1.75rem] border p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-end">
+          <div>
+            <p className="eyebrow"><ShieldCheck className="h-4 w-4" /> Private, temporary processing</p>
+            <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Your next file is a few clicks from finished.</h2>
+          </div>
+          <Link href="/tools/image-converter" className="button-primary w-fit">Open a converter <ArrowUpRight className="h-4 w-4" /></Link>
+        </div>
+        <div className="grid gap-10 md:grid-cols-2 xl:grid-cols-[1.7fr_1fr_1fr_1fr]">
           <div className="max-w-md">
             <div className="flex items-center gap-3">
               <span className="inline-flex h-10 w-10 shrink-0 overflow-hidden rounded-2xl ring-1 ring-[var(--border)]/70">

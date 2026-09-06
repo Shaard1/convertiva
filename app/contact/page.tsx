@@ -1,30 +1,5 @@
-import { InfoPage } from "@/components/InfoPage";
+import { Bug, Clock3, Lightbulb, Mail } from "lucide-react";
+import { ContactForm } from "@/components/ContactForm";
+import { SitePageShell } from "@/components/SitePageShell";
 
-export default function Page() {
-  return (
-    <InfoPage
-      badge="Contact"
-      title="Reach out when you need a clearer answer."
-      description="Convertiva is still growing into a fuller tools platform. If you need help, want to report an issue, or have a feature request, this page gives the right starting points."
-      sections={[
-        {
-          title: "Product questions",
-          body: "Use this space for questions about supported formats, usage limits, or which converter is the right fit for a task.",
-        },
-        {
-          title: "Bug reports",
-          body: "If a file fails unexpectedly, include the tool name, input format, and what you expected to happen.",
-        },
-        {
-          title: "Feature requests",
-          body: "Suggestions are most useful when they name the tool, the input type, the output type, and the user problem it should solve.",
-        },
-        {
-          title: "Current contact path",
-          body: "Until a dedicated contact workflow is added, product and support contact details can live here as the platform expands.",
-        },
-      ]}
-    />
-  );
-}
-
+export default function ContactPage() { return <SitePageShell><section className="editorial-hero contact-hero"><div className="editorial-wrap"><p className="eyebrow"><Mail className="h-4 w-4" /> Contact Convertiva</p><h1>Tell us what you’re trying to finish.</h1><div className="editorial-hero-foot"><p>Questions, bugs, feature ideas, and privacy requests all have a place here.</p><a href="mailto:hello@jaiidonee.com">hello@jaiidonee.com</a></div></div></section><section className="editorial-section"><div className="editorial-wrap contact-layout"><div><div className="contact-cards"><article><Bug /><h2>Report a problem</h2><p>Include the tool, input format, file size, browser, and exact error.</p></article><article><Lightbulb /><h2>Suggest a tool</h2><p>Tell us the source format, desired result, and why the conversion matters.</p></article><article><Clock3 /><h2>Response expectations</h2><p>Support is handled by email. Complex file-specific issues may need additional details.</p></article></div></div><div className="contact-form-card"><p className="eyebrow">Write to us</p><h2>Start a conversation.</h2><p>Your submission opens a prepared message in your email application. Do not include passwords or confidential files.</p><ContactForm /></div></div></section></SitePageShell>; }

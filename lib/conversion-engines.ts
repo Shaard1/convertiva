@@ -2,11 +2,14 @@ import { convertUploadedFile } from "@/lib/conversion";
 import { OutputFormat, OutputOptions } from "@/types/converter";
 import {
   ConversionEngineName,
+  ConversionToolName,
   StoredConversionOutput,
 } from "@/types/conversion-platform";
 
 type ConversionEngine = {
   name: ConversionEngineName;
+  mode: "inline";
+  tool: ConversionToolName;
   supportedOperations: readonly ["convert"];
   convert: (
     files: File[],
@@ -17,6 +20,8 @@ type ConversionEngine = {
 
 const sharpEngine: ConversionEngine = {
   name: "sharp",
+  mode: "inline",
+  tool: "image",
   supportedOperations: ["convert"],
   async convert(files, outputFormat, options) {
     const usedNames = new Set<string>();
@@ -38,13 +43,47 @@ const conversionEngines = new Map<ConversionEngineName, ConversionEngine>([
   [sharpEngine.name, sharpEngine],
 ]);
 
+const workerEngines = [
+  {
+    name: "ffmpeg",
+    mode: "worker",
+    tools: ["video", "audio"],
+    supportedOperations: ["convert"],
+  },
+  {
+    name: "libreoffice",
+    mode: "worker",
+    tools: ["document"],
+    supportedOperations: ["convert"],
+  },
+  {
+    name: "sevenzip",
+    mode: "worker",
+    tools: ["archive"],
+    supportedOperations: ["convert"],
+  },
+] satisfies Array<{
+  name: ConversionEngineName;
+  mode: "worker";
+  tools: ConversionToolName[];
+  supportedOperations: ["convert"];
+}>;
+
 export function getConversionEngine(name: ConversionEngineName = "sharp") {
   return conversionEngines.get(name) ?? null;
 }
 
+export function isWorkerConversionEngine(name: ConversionEngineName) {
+  return workerEngines.some((engine) => engine.name === name);
+}
+
 export function listConversionEngines() {
-  return Array.from(conversionEngines.values()).map((engine) => ({
+  const inlineEngines = Array.from(conversionEngines.values()).map((engine) => ({
     name: engine.name,
+    mode: engine.mode,
+    tools: [engine.tool],
     supportedOperations: engine.supportedOperations,
   }));
+
+  return [...inlineEngines, ...workerEngines];
 }

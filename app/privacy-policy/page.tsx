@@ -1,30 +1,19 @@
-import { InfoPage } from "@/components/InfoPage";
+import { Database, FileClock, LockKeyhole } from "lucide-react";
+import { SitePageShell } from "@/components/SitePageShell";
 
-export default function Page() {
-  return (
-    <InfoPage
-      badge="Privacy policy"
-      title="Convertiva keeps file handling temporary and focused."
-      description="Privacy matters most during upload, processing, and download. Convertiva is built around short-lived file handling rather than long-term storage."
-      sections={[
-        {
-          title: "Temporary processing",
-          body: "Files are processed for the task you request and are removed after their retention period expires.",
-        },
-        {
-          title: "Usage data",
-          body: "Basic usage tracking is used to enforce limits, support signed-in access, and keep the platform stable.",
-        },
-        {
-          title: "Accounts",
-          body: "If you sign in, account details are used only for authentication, usage limits, and related platform features.",
-        },
-        {
-          title: "Platform direction",
-          body: "As Convertiva grows, privacy details can expand, but the default product direction stays clear: process files, then let them go.",
-        },
-      ]}
-    />
-  );
-}
+const sections = [
+  ["1. Information we process", "When you use Convertiva, we may process files or public website URLs you submit, conversion settings, output files, technical request information, and usage counts. If you create an account, we process your email address, authentication identifiers, and session information. We do not ask you to include personal information inside uploaded files."],
+  ["2. Why we process it", "We use this information to perform the conversion you request, validate files, provide downloads, enforce daily and technical limits, maintain account access, prevent abuse, diagnose failures, and protect the reliability and security of the service."],
+  ["3. Uploaded files and outputs", "Uploaded files are processed only to complete the requested task. Guest download objects are configured to expire after one hour. For signed-in users, the latest 20 conversion-history items may remain available for up to 24 hours. Convertiva is not permanent file storage; keep your own original and backup copies."],
+  ["4. Accounts and authentication", "Account authentication is provided through Supabase when configured. Account records may include your email address, user identifier, login/session data, and daily usage totals. If you use a third-party sign-in provider, that provider also processes information under its own privacy terms."],
+  ["5. Local browser data", "Convertiva stores necessary preferences and guest usage counters in your browser, including theme preference and daily guest usage. Authentication may use necessary cookies or browser storage to keep you signed in. We do not describe advertising or profiling cookies because the current application does not implement them."],
+  ["6. Logs and security", "Hosting and infrastructure providers may create technical logs such as IP address, browser information, timestamps, requested routes, and error details. These logs are used for delivery, security, rate limiting, abuse prevention, and troubleshooting. Avoid including confidential file contents in support messages."],
+  ["7. Service providers", "Convertiva may rely on hosting, database, authentication, and processing providers, including Supabase and the deployment platform selected by the operator. These providers process information to deliver their services and are governed by their own terms and data-protection commitments."],
+  ["8. Your choices and rights", "You may use supported guest features without creating an account. You can clear local browser data through your browser controls. Depending on your location, you may have rights to request access, correction, deletion, restriction, portability, or objection concerning personal data associated with your account."],
+  ["9. Children", "Convertiva is a general-purpose utility and is not directed to children under 13. Do not use the service to submit children’s personal data without appropriate authority and safeguards."],
+  ["10. Changes and contact", "We may update this notice when the service, providers, or legal requirements change. Material updates should be reflected by a revised effective date. For privacy requests, use the Contact page and clearly label the request as a privacy matter."],
+];
 
+export default function PrivacyPage() { return <SitePageShell><LegalHero eyebrow="Privacy policy" title="Privacy should be understandable." description="This notice explains what Convertiva processes when you upload, convert, download, or sign in." /><section className="legal-body"><div className="legal-wrap"><aside><p>Effective September 6, 2026</p><nav aria-label="Privacy policy contents">{sections.map(([title]) => <a href={`#${title.slice(0, 2).trim()}`} key={title}>{title}</a>)}</nav></aside><div className="legal-sections">{sections.map(([title, body]) => <section id={title.slice(0, 2).trim()} key={title}><h2>{title}</h2><p>{body}</p></section>)}</div></div></section></SitePageShell>; }
+
+function LegalHero({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <section className="legal-hero"><div className="editorial-wrap"><p className="eyebrow"><LockKeyhole className="h-4 w-4" /> {eyebrow}</p><h1>{title}</h1><p>{description}</p><div className="legal-facts"><span><FileClock />1-hour guest retention</span><span><Database />24-hour account history</span><span><LockKeyhole />Purpose-limited processing</span></div></div></section>; }

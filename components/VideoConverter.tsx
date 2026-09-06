@@ -294,10 +294,10 @@ export function VideoConverter() {
   return (
     <>
       <Navbar user={user} usage={usage} onOpenAuth={openAuth} onLogout={handleLogout} />
-      <main>
-        <section className="relative px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
-          <div className="mx-auto max-w-4xl">
-            <div className="card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
+      <main className="converter-page" data-tool-kind="video">
+        <section className="converter-stage relative px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
+          <div className="converter-frame mx-auto max-w-7xl">
+            <div className="converter-shell card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                   <Film className="h-4 w-4" />

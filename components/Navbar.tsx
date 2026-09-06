@@ -22,9 +22,9 @@ type NavbarProps = {
 };
 
 const navLinks = [
-  { label: "Formats", href: "#formats" },
-  { label: "How it works", href: "#how-it-works" },
-];
+  { label: "Formats", href: "/formats" },
+  { label: "How it works", href: "/how-it-works" },
+] as const;
 
 const linkClass =
   "inline-flex min-h-[40px] items-center rounded-full px-3.5 py-2 text-sm font-semibold leading-none text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)]";
@@ -170,9 +170,9 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
               </div>
             </div>
             {navLinks.map((link) => (
-              <a key={link.href} href={link.href} className={linkClass}>
+              <Link key={link.href} href={link.href} className={linkClass}>
                 {link.label}
-              </a>
+              </Link>
             ))}
           </nav>
 
@@ -237,14 +237,14 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             <nav aria-label="Mobile navigation" className="grid gap-1">
               <MobileConvertersMenu activeRoute={pathname} onSelect={closeMenu} />
               {navLinks.map((link) => (
-                <a
+                <Link
                   key={link.href}
                   href={link.href}
                   onClick={closeMenu}
                   className="rounded-2xl px-4 py-3 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]"
                 >
                   {link.label}
-                </a>
+                </Link>
               ))}
             </nav>
 

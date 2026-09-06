@@ -1,30 +1,19 @@
-import { InfoPage } from "@/components/InfoPage";
+import { Scale } from "lucide-react";
+import { SitePageShell } from "@/components/SitePageShell";
 
-export default function Page() {
-  return (
-    <InfoPage
-      badge="Terms"
-      title="Use Convertiva for supported, everyday file tasks."
-      description="These terms are presented in plain language for the current platform stage and can grow with the product as more tools become available."
-      sections={[
-        {
-          title: "Supported use",
-          body: "Use Convertiva with supported file types, public website inputs where allowed, and normal conversion workflows.",
-        },
-        {
-          title: "Limits",
-          body: "Guest and signed-in usage can differ. The interface shows what is available before a conversion starts.",
-        },
-        {
-          title: "Availability",
-          body: "Some tools are ready today, while others are still marked Soon until their processing engines are in place.",
-        },
-        {
-          title: "Responsibility",
-          body: "Make sure you have the right to upload, convert, compress, merge, or export the files you use on the platform.",
-        },
-      ]}
-    />
-  );
-}
+const sections = [
+  ["1. Agreement", "By accessing or using Convertiva, you agree to these terms. If you do not agree, do not use the service. If you use Convertiva for an organization, you confirm that you are authorized to accept these terms for it."],
+  ["2. The service", "Convertiva provides file conversion, compression, archive, PDF, and public-webpage utilities. Features, supported formats, limits, and processing methods may change. Tools marked Coming soon are not available processing services."],
+  ["3. Your files and permissions", "You retain ownership of your files. You grant Convertiva the limited permission needed to receive, process, temporarily store, and return them for the task you request. You must have the legal right to upload and transform every file or URL you submit."],
+  ["4. Acceptable use", "Do not use Convertiva for unlawful, infringing, abusive, deceptive, or harmful material; malware; unauthorized access; private-network probing; automated overload; or attempts to bypass limits and security controls. Do not submit content when processing it would violate confidentiality duties or another person’s rights."],
+  ["5. Accounts and security", "You are responsible for activity under your account and for keeping login credentials secure. Provide accurate account information, notify support of suspected unauthorized access, and do not share access in a way that circumvents plan limits."],
+  ["6. Limits and availability", "Guest and signed-in use are subject to daily, file-size, batch, concurrency, timeout, and format limits. Convertiva may throttle, reject, or stop processing to protect the service. Availability is not guaranteed, and maintenance or provider failures may interrupt access."],
+  ["7. Downloads and backups", "Download results promptly. Guest downloads expire after one hour, while eligible signed-in history may remain for up to 24 hours. Convertiva is not a backup service. You are responsible for keeping originals and checking that outputs are complete and suitable before relying on them."],
+  ["8. No professional or archival guarantee", "Conversions can alter layout, metadata, quality, timing, formulas, fonts, transparency, or compatibility. Results are provided as generated and may not be appropriate for legal, medical, financial, evidentiary, archival, or safety-critical use without independent review."],
+  ["9. Intellectual property", "Convertiva’s interface, branding, software, and documentation are protected by applicable intellectual-property laws. These terms do not grant permission to copy, resell, reverse engineer, or commercially exploit the service except where applicable law expressly allows it."],
+  ["10. Disclaimer and liability", "To the extent permitted by law, the service is provided without warranties of uninterrupted operation, fitness for a particular purpose, or error-free results. The operator is not responsible for lost files, lost profits, indirect damages, or reliance on an inaccurate conversion. Rights that cannot legally be excluded remain unaffected."],
+  ["11. Suspension and termination", "Access may be suspended or terminated for misuse, security risk, legal requirements, prolonged inactivity, or material violation of these terms. You may stop using the service at any time and request account deletion through the Contact page."],
+  ["12. Changes and contact", "These terms may be revised as the service changes. The effective date should be updated when revisions are published. Questions about these terms can be sent through the Contact page."],
+];
 
+export default function TermsPage() { return <SitePageShell><section className="legal-hero"><div className="editorial-wrap"><p className="eyebrow"><Scale className="h-4 w-4" /> Terms of use</p><h1>Clear rules for a practical tool.</h1><p>These terms explain what you can expect from Convertiva and what we ask from everyone using it.</p></div></section><section className="legal-body"><div className="legal-wrap"><aside><p>Effective September 6, 2026</p><nav aria-label="Terms contents">{sections.map(([title]) => <a href={`#term-${title.slice(0, 2).trim()}`} key={title}>{title}</a>)}</nav></aside><div className="legal-sections">{sections.map(([title, body]) => <section id={`term-${title.slice(0, 2).trim()}`} key={title}><h2>{title}</h2><p>{body}</p></section>)}</div></div></section></SitePageShell>; }

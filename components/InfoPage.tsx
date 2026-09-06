@@ -29,13 +29,13 @@ export function InfoPage({ badge, title, description, sections }: InfoPageProps)
   } = useAppShellState();
 
   return (
-    <div className="page-shell min-h-screen text-[var(--foreground)]">
+    <div className="page-shell info-page min-h-screen text-[var(--foreground)]">
       <Navbar user={user} usage={usage} onOpenAuth={openAuth} onLogout={handleLogout} />
 
       <main>
         <section className="px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
-          <div className="mx-auto max-w-4xl">
-            <div className="card-shadow rounded-[1.75rem] border bg-[var(--card)] p-6 sm:p-8">
+          <div className="mx-auto max-w-6xl">
+            <div className="info-hero card-shadow rounded-[1.75rem] border bg-[var(--card)] p-6 sm:p-8 lg:p-12">
               <span className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                 <FileText className="h-4 w-4" />
                 {badge}
@@ -60,7 +60,7 @@ export function InfoPage({ badge, title, description, sections }: InfoPageProps)
         </section>
 
         <section className="soft-section px-4 py-16 sm:px-6 sm:py-20">
-          <div className="mx-auto grid max-w-5xl gap-5 md:grid-cols-2">
+          <div className="info-grid mx-auto grid max-w-6xl gap-5 md:grid-cols-2">
             {sections.map((section) => (
               <article key={section.title} className="rounded-[1.5rem] border bg-[var(--card)] p-6">
                 <h2 className="text-lg font-semibold text-[var(--foreground)]">{section.title}</h2>
