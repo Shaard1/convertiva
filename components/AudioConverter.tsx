@@ -720,7 +720,7 @@ function AudioOptionsModal({
         aria-modal="true"
         aria-label="Audio options"
         onClick={(event) => event.stopPropagation()}
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-[var(--card)] shadow-[0_12px_36px_rgba(20,40,30,0.14)] animate-[options-pop_180ms_ease-out]"
+        className="flex max-h-[calc(100svh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-[var(--card)] shadow-[0_12px_36px_rgba(20,40,30,0.14)] animate-[options-pop_180ms_ease-out]"
       >
         <div className="border-b px-4 py-3">
           <div className="flex items-start justify-between gap-3">

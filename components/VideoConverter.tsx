@@ -572,14 +572,14 @@ function VideoFormatDropdown({
               />
             </div>
           </div>
-          <div className="grid min-h-56 grid-cols-[8.5rem_minmax(0,1fr)]">
-            <div className="border-r bg-[var(--card-muted)] py-2 text-sm">
+          <div className="grid min-h-56 grid-cols-1 sm:grid-cols-[8.5rem_minmax(0,1fr)]">
+            <div className="flex overflow-x-auto border-b bg-[var(--card-muted)] py-2 text-sm sm:block sm:overflow-visible sm:border-b-0 sm:border-r">
               {videoFormatCategories.map((category) => (
                 <button
                   key={category.label}
                   type="button"
                   onClick={() => setActiveCategory(category.label)}
-                  className={`block w-full px-3 py-1.5 text-left font-semibold transition ${
+                  className={`block w-auto shrink-0 px-3 py-1.5 text-left font-semibold transition sm:w-full ${
                     activeCategory === category.label
                       ? "bg-[var(--background-secondary)] text-[var(--foreground)]"
                       : "text-[var(--foreground)] hover:bg-[var(--background-secondary)]"
@@ -656,7 +656,7 @@ function VideoOptionsModal({
         aria-modal="true"
         aria-label="Video options"
         onClick={(event) => event.stopPropagation()}
-        className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-[var(--card)] shadow-[0_12px_36px_rgba(20,40,30,0.14)] animate-[options-pop_180ms_ease-out]"
+        className="flex max-h-[calc(100svh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border bg-[var(--card)] shadow-[0_12px_36px_rgba(20,40,30,0.14)] animate-[options-pop_180ms_ease-out]"
       >
         <div className="border-b px-4 py-3">
           <div className="flex items-start justify-between gap-3">

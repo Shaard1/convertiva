@@ -247,7 +247,7 @@ export function UploadBox({
 
             <div
               className={clsx(
-                "absolute left-1/2 z-20 mt-2 w-64 -translate-x-1/2 overflow-hidden rounded-xl border bg-[var(--card)] text-sm shadow-xl transition-all duration-180 ease-out",
+                "absolute left-1/2 z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border bg-[var(--card)] text-sm shadow-xl transition-all duration-180 ease-out",
                 isMenuOpen
                   ? "visible translate-y-0 opacity-100"
                   : "pointer-events-none invisible -translate-y-1 opacity-0",

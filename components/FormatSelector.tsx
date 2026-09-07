@@ -124,8 +124,8 @@ export function FormatSelector({ value, onChange }: FormatSelectorProps) {
             </div>
           </div>
 
-          <div className="grid min-h-48 grid-cols-[7.5rem_minmax(0,1fr)]">
-            <div className="border-r bg-[var(--card-muted)] py-2 text-sm">
+          <div className="grid min-h-48 grid-cols-1 sm:grid-cols-[7.5rem_minmax(0,1fr)]">
+            <div className="grid grid-cols-2 border-b bg-[var(--card-muted)] py-2 text-sm sm:block sm:border-b-0 sm:border-r">
               <button
                 type="button"
                 onClick={() => setActiveCategory("document")}

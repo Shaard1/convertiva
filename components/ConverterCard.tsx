@@ -1064,7 +1064,7 @@ export function ConverterCard() {
       />
       {hasSelectedFiles && isOptionsOpen ? (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[color:color-mix(in_srgb,var(--foreground)_35%,transparent)] p-4 animate-[options-fade_180ms_ease-out]"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[color:color-mix(in_srgb,var(--foreground)_35%,transparent)] p-4 animate-[options-fade_180ms_ease-out] sm:items-center"
           onClick={closeOptionsModal}
           role="presentation"
         >

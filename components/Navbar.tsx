@@ -143,7 +143,7 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             aria-label="Primary navigation"
             className="hidden min-w-[360px] items-center justify-center gap-1 lg:flex"
           >
-            <div ref={convertersRef} className="relative">
+            <div ref={convertersRef}>
               <button
                 type="button"
                 onClick={() => setIsConvertersOpen((current) => !current)}
@@ -160,7 +160,7 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
                 />
               </button>
               <div
-                className={`absolute left-1/2 top-full z-50 mt-3 -translate-x-1/2 transition-all duration-180 ease-out ${
+                className={`fixed inset-x-4 top-[80px] z-50 mx-auto max-w-[1080px] transition-all duration-180 ease-out ${
                   isConvertersOpen
                     ? "visible translate-y-0 opacity-100"
                     : "pointer-events-none invisible -translate-y-1 opacity-0"
@@ -223,8 +223,10 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
         </div>
 
         <div
-          className={`overflow-hidden transition-[max-height,opacity,padding] duration-300 lg:hidden ${
-            isMenuOpen ? "max-h-[520px] pb-4 opacity-100" : "max-h-0 pb-0 opacity-0"
+          className={`overscroll-contain transition-[max-height,opacity,padding] duration-300 lg:hidden ${
+            isMenuOpen
+              ? "max-h-[calc(100svh-68px)] overflow-y-auto pb-4 opacity-100"
+              : "max-h-0 overflow-hidden pb-0 opacity-0"
           }`}
         >
           <div className="rounded-[1.25rem] border bg-[color-mix(in_srgb,var(--card)_96%,transparent)] p-3 shadow-[0_16px_40px_rgba(24,37,28,0.08)]">

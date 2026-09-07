@@ -109,11 +109,11 @@ export function ConvertersMegaMenu({
     <div
       id="converters-menu"
       data-converters-menu
-      className="grid w-[min(1080px,calc(100vw-2rem))] gap-3 rounded-[1.5rem] border bg-[var(--card)] p-4 shadow-[0_14px_34px_rgba(24,37,28,0.10)] md:grid-cols-2 xl:grid-cols-[1.7fr_0.85fr_0.85fr]"
+      className="grid max-h-[calc(100svh-5.5rem)] w-full gap-3 overflow-y-auto overscroll-contain rounded-[1.5rem] border bg-[var(--card)] p-4 shadow-[0_14px_34px_rgba(24,37,28,0.10)] lg:grid-cols-[minmax(0,1.7fr)_minmax(0,0.85fr)_minmax(0,0.85fr)]"
     >
       <section className="min-w-0">
         <SectionTitle title="Convert files" />
-        <div className="grid gap-x-3 gap-y-1.5 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)]">
+        <div className="grid gap-x-3 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.12fr)]">
           {convertFileToolColumns.map((columnTools, columnIndex) => (
             <div key={columnIndex} className="grid gap-1.5">
               {columnTools.map((tool) => (
@@ -159,7 +159,7 @@ export function ConvertersMegaMenu({
         </section>
       </div>
 
-      <div className="grid min-w-0 content-start gap-3 md:col-span-2 xl:col-span-1">
+      <div className="grid min-w-0 content-start gap-3">
         <section className="min-w-0">
           <SectionTitle title="Archive tools" />
           <div className="grid gap-1.5">
