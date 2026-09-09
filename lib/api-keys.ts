@@ -13,6 +13,7 @@ type ApiKeyRow = {
   name: string;
   is_active: boolean;
   expires_at: string | null;
+  last_used_at: string | null;
 };
 
 export class ApiAuthError extends Error {
@@ -92,7 +93,7 @@ export async function authenticateConversionApiRequest(
   const keyHash = hashApiKey(token);
   const { data, error } = await supabase
     .from("conversion_api_keys")
-    .select("id,user_id,key_hash,key_prefix,name,is_active,expires_at")
+    .select("id,user_id,key_hash,key_prefix,name,is_active,expires_at,last_used_at")
     .eq("key_hash", keyHash)
     .maybeSingle();
 
@@ -110,10 +111,22 @@ export async function authenticateConversionApiRequest(
     throw new ApiAuthError("API key has expired.");
   }
 
-  await supabase
-    .from("conversion_api_keys")
-    .update({ last_used_at: new Date().toISOString() })
-    .eq("id", apiKey.id);
+  const lastUsedAt = apiKey.last_used_at
+    ? new Date(apiKey.last_used_at).getTime()
+    : 0;
+
+  if (!Number.isFinite(lastUsedAt) || Date.now() - lastUsedAt > 5 * 60 * 1000) {
+    const { error: updateError } = await supabase
+      .from("conversion_api_keys")
+      .update({ last_used_at: new Date().toISOString() })
+      .eq("id", apiKey.id);
+
+    if (updateError) {
+      console.error("API key last-used timestamp could not be updated", {
+        apiKeyId: apiKey.id,
+      });
+    }
+  }
 
   return {
     type: "api_key",

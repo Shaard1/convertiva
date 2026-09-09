@@ -2,14 +2,47 @@ import JSZip from "jszip";
 import {
   createDownloadHeaders,
   buildToolErrorResponse,
+  handleToolRequest,
   hasFileExtension,
+  rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
 
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES = 500;
+const MAX_EXTRACTED_BYTES = 250 * 1024 * 1024;
+
+async function readEntryBounded(
+  entry: JSZip.JSZipObject,
+  remainingBytes: number,
+) {
+  const stream = entry.nodeStream("nodebuffer");
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  for await (const chunk of stream) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buffer.byteLength;
+
+    if (totalBytes > remainingBytes) {
+      throw new Error("The extracted archive exceeds the allowed size.");
+    }
+
+    chunks.push(buffer);
+  }
+
+  return Buffer.concat(chunks, totalBytes);
+}
 
 export async function POST(request: Request) {
+  return handleToolRequest("extract_archive", "The archive could not be extracted.", async () => {
+  const sizeError = rejectOversizedRequest(request, MAX_ARCHIVE_BYTES + 1024 * 1024);
+
+  if (sizeError) {
+    return sizeError;
+  }
+
   const formData = await request.formData();
   const file = formData.get("file");
 
@@ -32,9 +65,13 @@ export async function POST(request: Request) {
     return buildToolErrorResponse("The archive does not contain any files.");
   }
 
+  if (entries.length > MAX_ARCHIVE_ENTRIES) {
+    return buildToolErrorResponse("The archive contains too many files.", 413);
+  }
+
   if (entries.length === 1) {
     const [entry] = entries;
-    const content = await entry.async("uint8array");
+    const content = await readEntryBounded(entry, MAX_EXTRACTED_BYTES);
 
     return new Response(new Uint8Array(content), {
       headers: createDownloadHeaders(entry.name, "application/octet-stream"),
@@ -42,9 +79,15 @@ export async function POST(request: Request) {
   }
 
   const extractedArchive = new JSZip();
+  let extractedBytes = 0;
 
   for (const entry of entries) {
-    extractedArchive.file(entry.name, await entry.async("uint8array"));
+    const content = await readEntryBounded(
+      entry,
+      MAX_EXTRACTED_BYTES - extractedBytes,
+    );
+    extractedBytes += content.byteLength;
+    extractedArchive.file(entry.name, content);
   }
 
   const archiveBuffer = await extractedArchive.generateAsync({
@@ -55,5 +98,6 @@ export async function POST(request: Request) {
 
   return new Response(new Uint8Array(archiveBuffer), {
     headers: createDownloadHeaders("extracted-files.zip", "application/zip"),
+  });
   });
 }

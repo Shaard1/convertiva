@@ -4,6 +4,7 @@ import test from "node:test";
 
 const constantsSource = await readFile("lib/constants.ts", "utf8");
 const routeSource = await readFile("app/api/convert/route.ts", "utf8");
+const routeUtilsSource = await readFile("lib/tools/routeUtils.ts", "utf8");
 const componentSource = await readFile("components/ConverterCard.tsx", "utf8");
 const apiKeyRouteSource = await readFile("app/api/v1/api-keys/route.ts", "utf8");
 const jobRouteSource = await readFile("app/api/v1/jobs/route.ts", "utf8");
@@ -55,7 +56,8 @@ test("conversion API enforces request and batch protections", () => {
 test("conversion API returns binary downloads instead of base64 JSON payloads", () => {
   assert.doesNotMatch(routeSource, /toString\("base64"\)/);
   assert.match(routeSource, /application\/zip/);
-  assert.match(routeSource, /X-Converted-File-Name/);
+  assert.match(routeSource, /createDownloadHeaders/);
+  assert.match(routeUtilsSource, /X-Converted-File-Name/);
 });
 
 test("browser decodes API blobs directly", () => {
@@ -150,4 +152,27 @@ test("v1 worker endpoint is protected for production processing", () => {
   assert.match(workerInputRouteSource, /isAuthorizedWorkerRequest/);
   assert.match(workerOutputRouteSource, /isAuthorizedWorkerRequest/);
   assert.match(workerFailRouteSource, /isAuthorizedWorkerRequest/);
+});
+
+test("worker claims and usage reservations are atomic database operations", () => {
+  assert.match(supabaseSetupSource, /claim_next_worker_conversion_job/);
+  assert.match(supabaseSetupSource, /claim_next_inline_conversion_job/);
+  assert.match(supabaseSetupSource, /for update skip locked/);
+  assert.match(supabaseSetupSource, /worker_lease_expires_at/);
+  assert.match(supabaseSetupSource, /attempt_count/);
+  assert.match(supabaseSetupSource, /reserve_guest_conversion_usage/);
+  assert.match(supabaseSetupSource, /reserve_authenticated_conversion_usage/);
+  assert.match(routeSource, /reserveUsage\(identity, files\.length\)/);
+  assert.match(routeSource, /releaseUsage\(identity, files\.length\)/);
+});
+
+test("guest usage tables are not writable through anonymous policies", () => {
+  assert.doesNotMatch(
+    supabaseSetupSource,
+    /create policy "Anon can (?:read|insert|update) guest usage"/,
+  );
+  assert.doesNotMatch(
+    supabaseSetupSource,
+    /create policy "Users can (?:insert|update) their own usage"/,
+  );
 });

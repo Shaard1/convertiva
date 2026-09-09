@@ -8,6 +8,7 @@ import {
   getConversionJobError,
   getConversionJobOutputs,
 } from "@/lib/conversion-jobs";
+import { createDownloadHeaders } from "@/lib/tools/routeUtils";
 
 type RouteContext = {
   params: Promise<{
@@ -16,13 +17,6 @@ type RouteContext = {
 };
 
 export const runtime = "nodejs";
-
-function createDownloadHeaders(fileName: string, contentType: string) {
-  return {
-    "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
-    "Content-Type": contentType,
-  };
-}
 
 type DownloadOutput = NonNullable<
   Awaited<ReturnType<typeof getConversionJobOutputs>>

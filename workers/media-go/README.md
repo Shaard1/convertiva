@@ -17,10 +17,17 @@ inside a Next.js request handler.
 CONVERSION_API_BASE_URL=http://localhost:3000
 CONVERSION_WORKER_SECRET=
 MEDIA_WORKER_POLL_SECONDS=5
+MEDIA_WORKER_HTTP_TIMEOUT_SECONDS=300
+MEDIA_WORKER_JOB_TIMEOUT_SECONDS=900
+MEDIA_WORKER_MAX_TRANSFER_BYTES=536870912
 MEDIA_WORKER_ENABLE_PROCESSING=false
 ```
 
 The worker also requires `ffmpeg` to be available on `PATH`.
+
+The worker stops gracefully on shutdown, limits response bodies and output
+files, and terminates media processing after `MEDIA_WORKER_JOB_TIMEOUT_SECONDS`.
+Keep the job timeout below the platform's worker lease duration.
 
 ## Planned Platform Contract
 

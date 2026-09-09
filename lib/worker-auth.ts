@@ -1,3 +1,19 @@
+import { timingSafeEqual } from "node:crypto";
+
+function secretsMatch(candidate: string | null, expected: string) {
+  if (!candidate) {
+    return false;
+  }
+
+  const candidateBytes = Buffer.from(candidate);
+  const expectedBytes = Buffer.from(expected);
+
+  return (
+    candidateBytes.byteLength === expectedBytes.byteLength &&
+    timingSafeEqual(candidateBytes, expectedBytes)
+  );
+}
+
 export function isAuthorizedWorkerRequest(request: Request) {
   const workerSecret = process.env.CONVERSION_WORKER_SECRET;
 
@@ -7,10 +23,13 @@ export function isAuthorizedWorkerRequest(request: Request) {
 
   const authorization = request.headers.get("authorization");
   const headerSecret = request.headers.get("x-worker-secret");
+  const bearerSecret = authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : null;
 
   return (
-    authorization === `Bearer ${workerSecret}` ||
-    headerSecret === workerSecret
+    secretsMatch(bearerSecret, workerSecret) ||
+    secretsMatch(headerSecret, workerSecret)
   );
 }
 

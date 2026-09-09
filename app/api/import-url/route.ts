@@ -1,11 +1,14 @@
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import { NextResponse } from "next/server";
 import {
   MEGABYTE_BYTES,
   SUPPORTED_INPUT_EXTENSIONS,
   SUPPORTED_INPUT_MIME_TYPES,
 } from "@/lib/constants";
+import {
+  fetchPublicResource,
+  validatePublicHttpUrl,
+} from "@/lib/security/public-network";
+import { rejectOversizedRequest } from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
 
@@ -22,53 +25,6 @@ function getFileNameFromUrl(url: URL) {
   return hasExtension ? decodedSegment : "imported-image";
 }
 
-function isPrivateIp(address: string) {
-  if (!isIP(address)) {
-    return false;
-  }
-
-  if (address === "::1" || address.startsWith("fc") || address.startsWith("fd")) {
-    return true;
-  }
-
-  const parts = address.split(".").map(Number);
-
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part))) {
-    return false;
-  }
-
-  const [first, second] = parts;
-
-  return (
-    first === 10 ||
-    first === 127 ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    (first === 169 && second === 254) ||
-    first === 0
-  );
-}
-
-async function assertPublicUrl(url: URL) {
-  if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("Only HTTP and HTTPS image links are supported.");
-  }
-
-  if (url.username || url.password) {
-    throw new Error("Image links cannot include usernames or passwords.");
-  }
-
-  if (["localhost", "127.0.0.1", "::1"].includes(url.hostname.toLowerCase())) {
-    throw new Error("Local image links are not supported.");
-  }
-
-  const records = await lookup(url.hostname, { all: true });
-
-  if (!records.length || records.some((record) => isPrivateIp(record.address))) {
-    throw new Error("Private network image links are not supported.");
-  }
-}
-
 function isSupportedImage(contentType: string) {
   const normalizedType = contentType.split(";")[0]?.trim().toLowerCase();
 
@@ -79,31 +35,27 @@ function isSupportedImage(contentType: string) {
 
 export async function POST(request: Request) {
   try {
+    const sizeError = rejectOversizedRequest(request, 16 * 1024);
+
+    if (sizeError) {
+      return sizeError;
+    }
+
     const payload = (await request.json()) as { url?: unknown };
 
     if (typeof payload.url !== "string" || !payload.url.trim()) {
       return NextResponse.json({ error: "Enter an image URL." }, { status: 400 });
     }
 
-    const url = new URL(payload.url.trim());
-    await assertPublicUrl(url);
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
-    const response = await fetch(url, {
-      redirect: "follow",
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timer));
-
-    if (!response.ok) {
-      return NextResponse.json(
-        { error: "Could not load an image from that URL." },
-        { status: 400 },
-      );
-    }
-
-    const contentType = response.headers.get("content-type") ?? "";
+    const url = await validatePublicHttpUrl(payload.url.trim());
+    const resource = await fetchPublicResource(url, {
+      timeoutMs: REQUEST_TIMEOUT_MS,
+      maxBytes: MAX_REMOTE_IMAGE_BYTES,
+      headers: {
+        Accept: "image/*",
+      },
+    });
+    const contentType = resource.contentType;
 
     if (!isSupportedImage(contentType)) {
       return NextResponse.json(
@@ -112,28 +64,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const contentLength = Number(response.headers.get("content-length") ?? 0);
-
-    if (contentLength > MAX_REMOTE_IMAGE_BYTES) {
-      return NextResponse.json(
-        { error: "Image URL is too large. Try a smaller image." },
-        { status: 400 },
-      );
-    }
-
-    const buffer = Buffer.from(await response.arrayBuffer());
-
-    if (buffer.byteLength > MAX_REMOTE_IMAGE_BYTES) {
-      return NextResponse.json(
-        { error: "Image URL is too large. Try a smaller image." },
-        { status: 400 },
-      );
-    }
-
-    return new NextResponse(new Uint8Array(buffer), {
+    return new NextResponse(new Uint8Array(Buffer.from(resource.body)), {
       headers: {
         "Content-Type": contentType,
-        "X-Imported-File-Name": encodeURIComponent(getFileNameFromUrl(url)),
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "X-Imported-File-Name": encodeURIComponent(
+          getFileNameFromUrl(resource.finalUrl),
+        ),
       },
     });
   } catch (error) {

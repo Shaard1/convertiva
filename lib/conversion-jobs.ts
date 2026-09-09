@@ -1,6 +1,13 @@
-import { CONVERSION_POLICIES } from "@/lib/constants";
 import {
+  CONVERSION_POLICIES,
+  SUPPORTED_INPUT_EXTENSIONS,
+  SUPPORTED_INPUT_MIME_TYPES,
+} from "@/lib/constants";
+import { CapacityExceededError } from "@/lib/capacity";
+import {
+  canEngineHandleTool,
   getConversionEngine,
+  isConversionEngineImplemented,
   isWorkerConversionEngine,
 } from "@/lib/conversion-engines";
 import { getOutputMimeType } from "@/lib/format";
@@ -23,6 +30,9 @@ import {
 
 const JOB_RETENTION_MS = 60 * 60 * 1000;
 const JOB_STORAGE_BUCKET = "conversion-platform-files";
+const MAX_JOB_TOTAL_BYTES = 250 * 1024 * 1024;
+const MAX_WORKER_OUTPUT_FILES = 50;
+const MAX_WORKER_OUTPUT_BYTES = 500 * 1024 * 1024;
 const DEFAULT_OUTPUT_OPTIONS: OutputOptions = {
   quality: 90,
   keepMetadata: false,
@@ -35,7 +45,47 @@ type ToolConversionConfig = {
 };
 
 const archiveOutputFormats = ["zip", "7z", "tar"] as const;
-const imageOutputFormats = ["avif", "bmp", "gif", "ico", "jpg", "png", "tiff", "webp"] as const;
+const imageOutputFormats = ["avif", "bmp", "gif", "ico", "jpg", "pdf", "png", "tiff", "webp"] as const;
+const toolInputPolicies = {
+  image: {
+    extensions: SUPPORTED_INPUT_EXTENSIONS,
+    mimePrefixes: ["image/"],
+    maxFiles: CONVERSION_POLICIES.authenticated.maxBatchFiles,
+    maxFileBytes: CONVERSION_POLICIES.authenticated.maxFileSizeBytes,
+  },
+  video: {
+    extensions: ["3g2", "3gp", "avi", "flv", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "mxf", "ogv", "ts", "vob", "webm", "wmv"],
+    mimePrefixes: ["video/"],
+    maxFiles: 1,
+    maxFileBytes: 250 * 1024 * 1024,
+  },
+  audio: {
+    extensions: ["aac", "ac3", "aif", "aiff", "amr", "au", "caf", "flac", "m4a", "m4b", "mp3", "oga", "opus", "wav", "weba", "wma"],
+    mimePrefixes: ["audio/"],
+    maxFiles: 1,
+    maxFileBytes: 100 * 1024 * 1024,
+  },
+  document: {
+    extensions: ["csv", "doc", "docx", "html", "md", "odt", "pdf", "rtf", "txt", "xls", "xlsx"],
+    mimePrefixes: ["application/", "text/"],
+    maxFiles: 1,
+    maxFileBytes: 50 * 1024 * 1024,
+  },
+  archive: {
+    extensions: ["7z", "gz", "rar", "tar", "tgz", "zip"],
+    mimePrefixes: ["application/"],
+    maxFiles: 1,
+    maxFileBytes: 100 * 1024 * 1024,
+  },
+} satisfies Record<
+  ConversionToolName,
+  {
+    extensions: readonly string[];
+    mimePrefixes: readonly string[];
+    maxFiles: number;
+    maxFileBytes: number;
+  }
+>;
 
 const toolConversionConfigs = {
   image: {
@@ -139,9 +189,9 @@ function parseJobPayload(value: FormDataEntryValue | null): ConversionJobRequest
 
 function getConvertTask(jobRequest: ConversionJobRequest): ConversionTaskRequest {
   const tasks = Object.values(jobRequest.tasks);
-  const convertTasks = tasks.filter((task) => task.operation === "convert");
+  const convertTasks = tasks.filter(isConversionTask);
 
-  if (convertTasks.length !== 1) {
+  if (tasks.length !== 1 || convertTasks.length !== 1) {
     throw new ConversionJobError("Exactly one convert task is required.");
   }
 
@@ -171,16 +221,97 @@ function isImageOutputFormat(value: string): value is OutputFormat {
 }
 
 function getOutputOptions(
-  options?: Partial<OutputOptions> & Record<string, unknown>,
+  options?: Record<string, unknown>,
 ): OutputOptions {
+  const quality =
+    typeof options?.quality === "number" &&
+    Number.isFinite(options.quality) &&
+    options.quality >= 1 &&
+    options.quality <= 100
+      ? Math.round(options.quality)
+      : DEFAULT_OUTPUT_OPTIONS.quality;
+  const dimension = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) && value >= 1 && value <= 10_000
+      ? Math.round(value)
+      : undefined;
+  const backgroundColor =
+    typeof options?.backgroundColor === "string" &&
+    /^#[0-9a-f]{6}$/i.test(options.backgroundColor)
+      ? options.backgroundColor
+      : DEFAULT_OUTPUT_OPTIONS.backgroundColor;
+  const requestedFitMode = options?.fitMode;
+  const fitMode: OutputOptions["fitMode"] =
+    requestedFitMode === "max" ||
+    requestedFitMode === "crop" ||
+    requestedFitMode === "scale"
+      ? requestedFitMode
+      : undefined;
+
   return {
-    ...DEFAULT_OUTPUT_OPTIONS,
-    ...options,
-    quality: options?.quality ?? DEFAULT_OUTPUT_OPTIONS.quality,
-    keepMetadata: options?.keepMetadata ?? DEFAULT_OUTPUT_OPTIONS.keepMetadata,
-    backgroundColor:
-      options?.backgroundColor ?? DEFAULT_OUTPUT_OPTIONS.backgroundColor,
+    quality,
+    width: dimension(options?.width),
+    height: dimension(options?.height),
+    fitMode,
+    keepMetadata:
+      typeof options?.keepMetadata === "boolean"
+        ? options.keepMetadata
+        : DEFAULT_OUTPUT_OPTIONS.keepMetadata,
+    backgroundColor,
   };
+}
+
+function enumOption(value: unknown, allowedValues: readonly string[]) {
+  return typeof value === "string" && allowedValues.includes(value)
+    ? value
+    : "auto";
+}
+
+function trimOption(value: unknown) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const normalized = value.trim();
+  return /^(?:\d+(?:\.\d{1,3})?|\d{1,3}:[0-5]\d(?::[0-5]\d(?:\.\d{1,3})?)?)$/.test(
+    normalized,
+  )
+    ? normalized
+    : "";
+}
+
+function normalizeTaskOptions(
+  tool: ConversionToolName,
+  options?: Record<string, unknown>,
+): Record<string, unknown> {
+  if (tool === "image") {
+    return getOutputOptions(options);
+  }
+
+  if (tool === "audio") {
+    return {
+      quality: enumOption(options?.quality, ["auto", "low", "medium", "high"]),
+      bitrate: enumOption(options?.bitrate, ["auto", "96", "128", "192", "256", "320"]),
+      sampleRate: enumOption(options?.sampleRate, ["auto", "22050", "44100", "48000"]),
+      channels: enumOption(options?.channels, ["auto", "mono", "stereo"]),
+      trimStart: trimOption(options?.trimStart),
+      trimEnd: trimOption(options?.trimEnd),
+      normalizeVolume: options?.normalizeVolume === true,
+    };
+  }
+
+  if (tool === "video") {
+    return {
+      resolution: enumOption(options?.resolution, ["auto", "480p", "720p", "1080p", "1440p", "4k"]),
+      quality: enumOption(options?.quality, ["auto", "low", "medium", "high"]),
+      videoCodec: enumOption(options?.videoCodec, ["auto", "h264", "h265", "vp9", "av1"]),
+      audioCodec: enumOption(options?.audioCodec, ["auto", "aac", "mp3", "opus", "vorbis"]),
+      removeAudio: options?.removeAudio === true,
+      trimStart: trimOption(options?.trimStart),
+      trimEnd: trimOption(options?.trimEnd),
+    };
+  }
+
+  return {};
 }
 
 function getProcessingMode(): ConversionProcessingMode {
@@ -196,22 +327,53 @@ function isConversionTask(value: unknown): value is ConversionTaskRequest {
   );
 }
 
-function validateFiles(files: File[]) {
-  const policy = CONVERSION_POLICIES.authenticated;
+function validateFiles(files: File[], tool: ConversionToolName) {
+  const policy = toolInputPolicies[tool];
 
   if (!files.length) {
     throw new ConversionJobError("At least one file is required.");
   }
 
-  if (files.length > policy.maxBatchFiles) {
+  if (files.length > policy.maxFiles) {
     throw new ConversionJobError(
-      `Upload ${policy.maxBatchFiles} files or fewer per job.`,
+      `Upload ${policy.maxFiles} file${policy.maxFiles === 1 ? "" : "s"} or fewer per job.`,
     );
   }
 
+  const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+
+  if (totalBytes > MAX_JOB_TOTAL_BYTES) {
+    throw new ConversionJobError("The combined upload size exceeds the job limit.", 413);
+  }
+
   files.forEach((file) => {
-    if (file.size > policy.maxFileSizeBytes) {
-      throw new ConversionJobError("One or more files exceed the size limit.");
+    if (file.size > policy.maxFileBytes) {
+      throw new ConversionJobError("One or more files exceed the size limit.", 413);
+    }
+
+    if (
+      !file.name ||
+      file.name.length > 180 ||
+      /[\\/\u0000-\u001f]/.test(file.name)
+    ) {
+      throw new ConversionJobError("One or more file names are invalid.");
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+    const hasAllowedExtension = (policy.extensions as readonly string[]).includes(
+      extension,
+    );
+    const hasAllowedMimeType =
+      tool === "image"
+        ? SUPPORTED_INPUT_MIME_TYPES.includes(
+            file.type as (typeof SUPPORTED_INPUT_MIME_TYPES)[number],
+          )
+        : policy.mimePrefixes.some((prefix) => file.type.startsWith(prefix));
+    const hasGenericMimeType =
+      !file.type || file.type === "application/octet-stream";
+
+    if (!hasAllowedExtension || (!hasAllowedMimeType && !hasGenericMimeType)) {
+      throw new ConversionJobError(`Unsupported ${tool} input file.`);
     }
   });
 }
@@ -341,7 +503,7 @@ async function persistJob(job: StoredConversionJob) {
     return;
   }
 
-  await supabase.from("conversion_platform_jobs").upsert({
+  const { error: jobError } = await supabase.from("conversion_platform_jobs").upsert({
     id: job.id,
     status: job.status,
     created_at: job.createdAt,
@@ -353,8 +515,12 @@ async function persistJob(job: StoredConversionJob) {
     api_key_id: job.apiKeyId,
   });
 
+  if (jobError) {
+    throw new ConversionJobError("Could not persist the conversion job.", 503);
+  }
+
   if (job.inputFiles.length) {
-    await supabase.from("conversion_platform_files").upsert(
+    const { error: fileError } = await supabase.from("conversion_platform_files").upsert(
       job.inputFiles.map((file) => ({
         id: file.id,
         job_id: job.id,
@@ -365,6 +531,10 @@ async function persistJob(job: StoredConversionJob) {
         storage_path: file.storagePath,
       })),
     );
+
+    if (fileError) {
+      throw new ConversionJobError("Could not persist conversion inputs.", 503);
+    }
   }
 }
 
@@ -375,7 +545,7 @@ async function persistJobStatus(job: StoredConversionJob) {
     return;
   }
 
-  await supabase
+  const { error } = await supabase
     .from("conversion_platform_jobs")
     .update({
       status: job.status,
@@ -383,8 +553,14 @@ async function persistJobStatus(job: StoredConversionJob) {
       error: job.error,
       user_id: job.userId,
       api_key_id: job.apiKeyId,
+      worker_lease_expires_at:
+        job.status === "processing" ? undefined : null,
     })
     .eq("id", job.id);
+
+  if (error) {
+    throw new ConversionJobError("Could not update the conversion job.", 503);
+  }
 }
 
 async function persistOutputFiles(job: StoredConversionJob) {
@@ -394,7 +570,7 @@ async function persistOutputFiles(job: StoredConversionJob) {
     return;
   }
 
-  await supabase.from("conversion_platform_files").upsert(
+  const { error } = await supabase.from("conversion_platform_files").upsert(
     job.outputFiles.map((file) => ({
       id: file.id,
       job_id: job.id,
@@ -405,6 +581,10 @@ async function persistOutputFiles(job: StoredConversionJob) {
       storage_path: file.storagePath,
     })),
   );
+
+  if (error) {
+    throw new ConversionJobError("Could not persist converted outputs.", 503);
+  }
 }
 
 async function recordUsageEvent(job: StoredConversionJob) {
@@ -414,13 +594,20 @@ async function recordUsageEvent(job: StoredConversionJob) {
     return;
   }
 
-  await supabase.from("conversion_usage_events").insert({
+  const { error } = await supabase.from("conversion_usage_events").insert({
     api_key_id: job.apiKeyId,
     user_id: job.userId,
     job_id: job.id,
     event_type: "conversion_completed",
     conversion_count: job.outputFiles.length,
   });
+
+  if (error) {
+    console.error("Conversion usage event could not be recorded", {
+      jobId: job.id,
+      apiKeyId: job.apiKeyId,
+    });
+  }
 }
 
 async function persistInputFiles(job: StoredConversionJob) {
@@ -430,7 +617,7 @@ async function persistInputFiles(job: StoredConversionJob) {
     return;
   }
 
-  await supabase.from("conversion_platform_files").upsert(
+  const { error } = await supabase.from("conversion_platform_files").upsert(
     job.inputFiles.map((file) => ({
       id: file.id,
       job_id: job.id,
@@ -441,6 +628,10 @@ async function persistInputFiles(job: StoredConversionJob) {
       storage_path: file.storagePath,
     })),
   );
+
+  if (error) {
+    throw new ConversionJobError("Could not update conversion inputs.", 503);
+  }
 }
 
 async function uploadInputs(job: StoredConversionJob) {
@@ -532,62 +723,97 @@ async function loadNextQueuedJob() {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
-    return Array.from(conversionJobs.values())
-      .filter((job) => job.status === "queued" && !isWorkerJob(job))
+    const job = Array.from(conversionJobs.values())
+      .filter(
+        (job) =>
+          job.status === "queued" &&
+          new Date(job.expiresAt).getTime() > Date.now() &&
+          !isWorkerJob(job),
+      )
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0] ?? null;
+
+    if (job) {
+      job.status = "processing";
+      job.updatedAt = nowIso();
+    }
+
+    return job;
   }
 
-  const { data, error } = await supabase
-    .from("conversion_platform_jobs")
-    .select("id")
-    .eq("status", "queued")
-    .order("created_at", { ascending: true })
-    .limit(25);
+  const { data, error } = await supabase.rpc(
+    "claim_next_inline_conversion_job",
+  );
 
-  if (error || !data?.length) {
+  if (error) {
+    throw new ConversionJobError("Could not claim an inline conversion job.", 503);
+  }
+
+  const claimedRow = Array.isArray(data)
+    ? (data[0] as { job_id?: unknown } | undefined)
+    : undefined;
+  const claimedJobId =
+    typeof claimedRow?.job_id === "string" ? claimedRow.job_id : null;
+
+  if (!claimedJobId) {
     return null;
   }
 
-  for (const row of data as Array<{ id: string }>) {
-    const job = await loadStoredJob(row.id);
+  const job = await loadStoredJob(claimedJobId);
 
-    if (job && !isWorkerJob(job)) {
-      return job;
-    }
+  if (!job) {
+    throw new ConversionJobError("Claimed inline job could not be loaded.", 503);
   }
 
-  return null;
+  return job;
 }
 
 async function loadNextQueuedWorkerJob(tools: ConversionToolName[] = []) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
-    return Array.from(conversionJobs.values())
-      .filter((job) => job.status === "queued" && canWorkerClaimJob(job, tools))
+    const job = Array.from(conversionJobs.values())
+      .filter(
+        (job) =>
+          job.status === "queued" &&
+          new Date(job.expiresAt).getTime() > Date.now() &&
+          canWorkerClaimJob(job, tools),
+      )
       .sort((left, right) => left.createdAt.localeCompare(right.createdAt))[0] ?? null;
+
+    if (job) {
+      job.status = "processing";
+      job.updatedAt = nowIso();
+    }
+
+    return job;
   }
 
-  const { data, error } = await supabase
-    .from("conversion_platform_jobs")
-    .select("id")
-    .eq("status", "queued")
-    .order("created_at", { ascending: true })
-    .limit(25);
+  const { data, error } = await supabase.rpc(
+    "claim_next_worker_conversion_job",
+    { p_requested_tools: tools },
+  );
 
-  if (error || !data?.length) {
+  if (error) {
+    throw new ConversionJobError("Could not claim a conversion job.", 503);
+  }
+
+  const claimedRow = Array.isArray(data)
+    ? (data[0] as { job_id?: unknown } | undefined)
+    : undefined;
+  const claimedJobId =
+    typeof claimedRow?.job_id === "string" ? claimedRow.job_id : null;
+
+  if (!claimedJobId) {
     return null;
   }
 
-  for (const row of data as Array<{ id: string }>) {
-    const job = await loadStoredJob(row.id);
+  const job = await loadStoredJob(claimedJobId);
 
-    if (job && canWorkerClaimJob(job, tools)) {
-      return job;
-    }
+  if (!job) {
+    throw new ConversionJobError("Claimed conversion job could not be loaded.", 503);
   }
 
-  return null;
+  return job;
 }
 
 async function downloadStoredInput(
@@ -679,13 +905,28 @@ export async function createConversionJob(
   const convertTask = getConvertTask(jobRequest);
   const tool = getConversionTool(convertTask);
   const engineName = getTaskEngine(convertTask);
+  const normalizedOutputFormat = convertTask.output_format.trim().toLowerCase();
 
-  if (!isSupportedOutputFormat(tool, convertTask.output_format)) {
+  if (!isSupportedOutputFormat(tool, normalizedOutputFormat)) {
     throw new ConversionJobError("Unsupported output format.");
   }
 
-  const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
-  validateFiles(files);
+  if (!canEngineHandleTool(engineName, tool)) {
+    throw new ConversionJobError("The requested engine does not support this tool.");
+  }
+
+  if (!isConversionEngineImplemented(engineName)) {
+    throw new ConversionJobError("The requested conversion engine is not installed.", 501);
+  }
+
+  const entries = formData.getAll("files");
+  const files = entries.filter((entry): entry is File => entry instanceof File);
+
+  if (entries.length !== files.length) {
+    throw new ConversionJobError("One or more uploaded files are invalid.");
+  }
+
+  validateFiles(files, tool);
 
   const inlineEngine = getConversionEngine(engineName);
   const workerEngineAvailable = isWorkerConversionEngine(engineName);
@@ -703,6 +944,8 @@ export async function createConversionJob(
 
   convertTask.tool = tool;
   convertTask.engine = engineName;
+  convertTask.output_format = normalizedOutputFormat;
+  convertTask.options = normalizeTaskOptions(tool, convertTask.options);
 
   const job = createJob(files, convertTask, identity);
   await uploadInputs(job);
@@ -725,6 +968,10 @@ export async function getConversionJob(
 
   if (storedJob) {
     assertCanAccessJob(storedJob, identity);
+
+    if (new Date(storedJob.expiresAt).getTime() <= Date.now()) {
+      return null;
+    }
   }
 
   return storedJob ? toPublicJob(storedJob) : null;
@@ -738,12 +985,16 @@ export async function getConversionJobOutputs(
 
   if (job?.status === "finished") {
     assertCanAccessJob(job, identity);
-    return job.outputs;
+    return new Date(job.expiresAt).getTime() > Date.now() ? job.outputs : null;
   }
 
   const storedJob = await loadStoredJob(jobId);
 
   if (!storedJob || storedJob.status !== "finished") {
+    return null;
+  }
+
+  if (new Date(storedJob.expiresAt).getTime() <= Date.now()) {
     return null;
   }
 
@@ -791,7 +1042,7 @@ export async function processConversionJob(jobId: string) {
     return toPublicJob(job);
   }
 
-  if (job.status !== "queued") {
+  if (job.status !== "queued" && job.status !== "processing") {
     throw new ConversionJobError("Conversion job is not queued.", 409);
   }
 
@@ -810,9 +1061,11 @@ export async function processConversionJob(jobId: string) {
 
   const outputFormat = job.convertTask.output_format;
 
-  job.status = "processing";
-  job.updatedAt = nowIso();
-  await persistJobStatus(job);
+  if (job.status === "queued") {
+    job.status = "processing";
+    job.updatedAt = nowIso();
+    await persistJobStatus(job);
+  }
 
   try {
     const inputFiles = await loadJobInputFiles(job);
@@ -836,8 +1089,13 @@ export async function processConversionJob(jobId: string) {
     await persistJobStatus(job);
     await recordUsageEvent(job);
   } catch (error) {
-    job.status = "failed";
-    job.error = error instanceof Error ? error.message : "Conversion failed.";
+    const capacityExceeded = error instanceof CapacityExceededError;
+    job.status = capacityExceeded ? "queued" : "failed";
+    job.error = capacityExceeded
+      ? null
+      : error instanceof Error
+        ? error.message
+        : "Conversion failed.";
     job.updatedAt = nowIso();
     await persistJobStatus(job);
   }
@@ -864,13 +1122,9 @@ export async function claimNextWorkerConversionJob(
     return null;
   }
 
-  if (job.status !== "queued") {
+  if (job.status !== "processing") {
     throw new ConversionJobError("Conversion job is not queued.", 409);
   }
-
-  job.status = "processing";
-  job.updatedAt = nowIso();
-  await persistJobStatus(job);
 
   return serializeWorkerJob(job);
 }
@@ -923,6 +1177,26 @@ export async function completeWorkerConversionJob(
 
   if (!files.length) {
     throw new ConversionJobError("At least one output file is required.");
+  }
+
+  if (files.length > MAX_WORKER_OUTPUT_FILES) {
+    throw new ConversionJobError("The worker returned too many output files.", 413);
+  }
+
+  const totalOutputBytes = files.reduce((sum, file) => sum + file.size, 0);
+
+  if (totalOutputBytes > MAX_WORKER_OUTPUT_BYTES) {
+    throw new ConversionJobError("The worker output exceeds the job limit.", 413);
+  }
+
+  for (const file of files) {
+    if (
+      !file.name ||
+      file.name.length > 180 ||
+      /[\\/\u0000-\u001f]/.test(file.name)
+    ) {
+      throw new ConversionJobError("The worker returned an invalid file name.");
+    }
   }
 
   const convertedOutputs = await Promise.all(

@@ -47,24 +47,28 @@ const workerEngines = [
   {
     name: "ffmpeg",
     mode: "worker",
+    implemented: true,
     tools: ["video", "audio"],
     supportedOperations: ["convert"],
   },
   {
     name: "libreoffice",
     mode: "worker",
+    implemented: false,
     tools: ["document"],
     supportedOperations: ["convert"],
   },
   {
     name: "sevenzip",
     mode: "worker",
+    implemented: false,
     tools: ["archive"],
     supportedOperations: ["convert"],
   },
 ] satisfies Array<{
   name: ConversionEngineName;
   mode: "worker";
+  implemented: boolean;
   tools: ConversionToolName[];
   supportedOperations: ["convert"];
 }>;
@@ -77,6 +81,33 @@ export function isWorkerConversionEngine(name: ConversionEngineName) {
   return workerEngines.some((engine) => engine.name === name);
 }
 
+export function canEngineHandleTool(
+  name: ConversionEngineName,
+  tool: ConversionToolName,
+) {
+  const inlineEngine = conversionEngines.get(name);
+
+  if (inlineEngine) {
+    return inlineEngine.tool === tool;
+  }
+
+  return workerEngines.some(
+    (engine) =>
+      engine.name === name &&
+      (engine.tools as readonly ConversionToolName[]).includes(tool),
+  );
+}
+
+export function isConversionEngineImplemented(name: ConversionEngineName) {
+  if (conversionEngines.has(name)) {
+    return true;
+  }
+
+  return workerEngines.some(
+    (engine) => engine.name === name && engine.implemented,
+  );
+}
+
 export function listConversionEngines() {
   const inlineEngines = Array.from(conversionEngines.values()).map((engine) => ({
     name: engine.name,
@@ -85,5 +116,8 @@ export function listConversionEngines() {
     supportedOperations: engine.supportedOperations,
   }));
 
-  return [...inlineEngines, ...workerEngines];
+  return [
+    ...inlineEngines.map((engine) => ({ ...engine, implemented: true })),
+    ...workerEngines,
+  ];
 }

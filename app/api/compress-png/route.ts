@@ -2,7 +2,9 @@ import sharp from "sharp";
 import {
   buildToolErrorResponse,
   createDownloadHeaders,
+  handleToolRequest,
   hasFileExtension,
+  rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
@@ -10,28 +12,44 @@ export const runtime = "nodejs";
 const MAX_IMAGE_BYTES = 25 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  const formData = await request.formData();
-  const file = formData.get("file");
+  return handleToolRequest(
+    "compress_png",
+    "The PNG could not be compressed.",
+    async () => {
+      const sizeError = rejectOversizedRequest(
+        request,
+        MAX_IMAGE_BYTES + 1024 * 1024,
+      );
 
-  if (!(file instanceof File)) {
-    return buildToolErrorResponse("Upload one PNG file to compress.");
-  }
+      if (sizeError) {
+        return sizeError;
+      }
 
-  if (!hasFileExtension(file.name, ["png"])) {
-    return buildToolErrorResponse("Only PNG files can be compressed here.");
-  }
+      const formData = await request.formData();
+      const file = formData.get("file");
 
-  if (file.size > MAX_IMAGE_BYTES) {
-    return buildToolErrorResponse("The PNG must be under 25 MB.", 413);
-  }
+      if (!(file instanceof File)) {
+        return buildToolErrorResponse("Upload one PNG file to compress.");
+      }
 
-  const compressedImage = await sharp(await file.arrayBuffer(), { failOn: "error" })
-    .png({ compressionLevel: 9, effort: 10, palette: true })
-    .toBuffer();
+      if (!hasFileExtension(file.name, ["png"])) {
+        return buildToolErrorResponse("Only PNG files can be compressed here.");
+      }
 
-  const outputName = file.name.replace(/\.png$/i, "-compressed.png");
+      if (file.size > MAX_IMAGE_BYTES) {
+        return buildToolErrorResponse("The PNG must be under 25 MB.", 413);
+      }
 
-  return new Response(new Uint8Array(compressedImage), {
-    headers: createDownloadHeaders(outputName, "image/png"),
-  });
+      const compressedImage = await sharp(await file.arrayBuffer(), {
+        failOn: "error",
+      })
+        .png({ compressionLevel: 9, effort: 10, palette: true })
+        .toBuffer();
+      const outputName = file.name.replace(/\.png$/i, "-compressed.png");
+
+      return new Response(new Uint8Array(compressedImage), {
+        headers: createDownloadHeaders(outputName, "image/png"),
+      });
+    },
+  );
 }

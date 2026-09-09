@@ -25,9 +25,16 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     const { jobId } = await context.params;
     const formData = await request.formData();
-    const files = formData
-      .getAll("files")
-      .filter((entry): entry is File => entry instanceof File);
+    const entries = formData.getAll("files");
+    const files = entries.filter((entry): entry is File => entry instanceof File);
+
+    if (entries.length !== files.length) {
+      return NextResponse.json(
+        { error: "One or more worker outputs are invalid." },
+        { status: 400 },
+      );
+    }
+
     const job = await completeWorkerConversionJob(jobId, files);
 
     return NextResponse.json(serializeJob(job));

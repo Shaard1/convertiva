@@ -1,7 +1,11 @@
 import { existsSync } from "node:fs";
-import { isIP } from "node:net";
 import chromium from "@sparticuz/chromium";
-import type { LaunchOptions } from "playwright-core";
+import type { BrowserContext, LaunchOptions } from "playwright-core";
+import { CapacityLimiter, readConcurrencyLimit } from "@/lib/capacity";
+import {
+  assertPublicNetworkUrl,
+  validatePublicHttpUrl,
+} from "@/lib/security/public-network";
 
 const browserCandidates = [
   "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
@@ -9,49 +13,50 @@ const browserCandidates = [
   "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
 ];
 
-function isBlockedHostname(hostname: string) {
-  const normalized = hostname.toLowerCase();
+export const browserCapacity = new CapacityLimiter(
+  "Browser rendering",
+  readConcurrencyLimit("BROWSER_RENDER_CONCURRENCY", 2),
+);
 
-  if (
-    normalized === "localhost" ||
-    normalized === "::1" ||
-    normalized.endsWith(".localhost")
-  ) {
-    return true;
-  }
-
-  const ipVersion = isIP(normalized);
-
-  if (ipVersion === 4) {
-    return (
-      normalized.startsWith("10.") ||
-      normalized.startsWith("127.") ||
-      normalized.startsWith("192.168.") ||
-      /^172\.(1[6-9]|2\d|3[0-1])\./.test(normalized)
-    );
-  }
-
-  return false;
+export async function validateScreenshotUrl(value: string) {
+  return validatePublicHttpUrl(value);
 }
 
-export function validateScreenshotUrl(value: string) {
-  let parsedUrl: URL;
+export async function installPublicNetworkGuard(
+  context: BrowserContext,
+  maxRequests = 150,
+) {
+  let requestCount = 0;
 
-  try {
-    parsedUrl = new URL(value);
-  } catch {
-    throw new Error("Enter a valid website URL.");
-  }
+  await context.route("**/*", async (route) => {
+    const requestUrl = route.request().url();
 
-  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
-    throw new Error("Only http and https website URLs are supported.");
-  }
+    if (requestUrl.startsWith("data:") || requestUrl.startsWith("blob:")) {
+      await route.continue();
+      return;
+    }
 
-  if (isBlockedHostname(parsedUrl.hostname)) {
-    throw new Error("Local and private network addresses are not allowed.");
-  }
+    requestCount += 1;
 
-  return parsedUrl;
+    if (requestCount > maxRequests) {
+      await route.abort("blockedbyclient");
+      return;
+    }
+
+    try {
+      const parsedUrl = new URL(requestUrl);
+
+      if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        await route.abort("blockedbyclient");
+        return;
+      }
+
+      await assertPublicNetworkUrl(parsedUrl);
+      await route.continue();
+    } catch {
+      await route.abort("blockedbyclient");
+    }
+  });
 }
 
 export function getBrowserExecutablePath() {

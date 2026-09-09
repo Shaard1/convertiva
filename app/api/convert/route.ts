@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { createHash, createHmac } from "node:crypto";
 import JSZip from "jszip";
 import { NextResponse } from "next/server";
+import { CapacityExceededError } from "@/lib/capacity";
 import {
   CONVERSION_POLICIES,
   ConversionPolicyName,
@@ -13,6 +15,11 @@ import {
 import { convertUploadedFile, ConvertedImage } from "@/lib/conversion";
 import { formatFileSize, getFileExtensionLabel } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { getSupabaseAdminClient } from "@/lib/supabase-server";
+import {
+  createDownloadHeaders,
+  rejectOversizedRequest,
+} from "@/lib/tools/routeUtils";
 import { OutputFormat, OutputOptions } from "@/types/converter";
 
 export const runtime = "nodejs";
@@ -51,6 +58,7 @@ type GuestUsageRow = {
 
 const rateLimitStore = new Map<string, RateLimitRecord>();
 const guestUsageStore = new Map<string, DailyUsageRecord>();
+const MAX_IMAGE_BATCH_BYTES = 250 * 1024 * 1024;
 const DEFAULT_OUTPUT_OPTIONS: OutputOptions = {
   quality: 90,
   keepMetadata: false,
@@ -124,8 +132,28 @@ function getClientIp(request: Request): string {
   );
 }
 
+function getGuestUsageKey(request: Request) {
+  const clientIp = getClientIp(request);
+  const hashSecret =
+    process.env.GUEST_USAGE_HASH_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const digest = hashSecret
+    ? createHmac("sha256", hashSecret).update(clientIp).digest("hex")
+    : createHash("sha256").update(clientIp).digest("hex");
+
+  return `guest:${digest}`;
+}
+
 function enforceRateLimit(key: string) {
   const now = Date.now();
+
+  if (rateLimitStore.size > 10_000) {
+    for (const [storedKey, record] of rateLimitStore) {
+      if (now - record.windowStartedAt > RATE_LIMIT_WINDOW_MS) {
+        rateLimitStore.delete(storedKey);
+      }
+    }
+  }
+
   const current = rateLimitStore.get(key);
 
   if (!current || now - current.windowStartedAt > RATE_LIMIT_WINDOW_MS) {
@@ -191,7 +219,10 @@ function validateBatch(files: File[], policyName: ConversionPolicyName) {
   }
 
   const totalSize = files.reduce((sum, file) => sum + file.size, 0);
-  const maxTotalSize = policy.maxFileSizeBytes * policy.maxBatchFiles;
+  const maxTotalSize = Math.min(
+    policy.maxFileSizeBytes * policy.maxBatchFiles,
+    MAX_IMAGE_BATCH_BYTES,
+  );
 
   if (totalSize > maxTotalSize) {
     throw new RequestValidationError(
@@ -281,7 +312,7 @@ function getMemoryGuestUsage(key: string, date: string) {
 }
 
 async function getPersistentGuestUsage(key: string, date: string) {
-  const supabase = getSupabaseServerClient();
+  const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
     return getMemoryGuestUsage(key, date);
@@ -295,14 +326,13 @@ async function getPersistentGuestUsage(key: string, date: string) {
     .maybeSingle();
 
   if (error) {
-    return getMemoryGuestUsage(key, date);
+    throw new RequestValidationError("Could not verify guest usage.", 503);
   }
 
   return ((data as GuestUsageRow | null)?.conversions_used ?? 0);
 }
 
 async function getRequestIdentity(request: Request): Promise<RequestIdentity> {
-  const ip = getClientIp(request);
   const authorization = request.headers.get("authorization");
   const token = authorization?.startsWith("Bearer ")
     ? authorization.slice("Bearer ".length)
@@ -316,7 +346,13 @@ async function getRequestIdentity(request: Request): Promise<RequestIdentity> {
 
     if (user) {
       const date = getTodayDateString();
-      const { data, error } = await supabase
+      const usageClient = getSupabaseAdminClient();
+
+      if (!usageClient) {
+        throw new RequestValidationError("Could not verify account usage.", 503);
+      }
+
+      const { data, error } = await usageClient
         .from("conversion_usage")
         .select("conversions_used")
         .eq("user_id", user.id)
@@ -340,7 +376,7 @@ async function getRequestIdentity(request: Request): Promise<RequestIdentity> {
   }
 
   const date = getTodayDateString();
-  const key = `guest:${ip}`;
+  const key = getGuestUsageKey(request);
   const conversionsUsed = await getPersistentGuestUsage(key, date);
   guestUsageStore.set(key, { date, conversionsUsed });
 
@@ -353,51 +389,144 @@ async function getRequestIdentity(request: Request): Promise<RequestIdentity> {
   };
 }
 
-async function incrementUsage(identity: RequestIdentity, count: number) {
+type UsageReservation = {
+  allowed: boolean;
+  conversions_used: number;
+};
+
+function getUsageReservation(data: unknown) {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+
+  const row = data[0] as Partial<UsageReservation> | undefined;
+
+  if (
+    typeof row?.allowed !== "boolean" ||
+    typeof row.conversions_used !== "number"
+  ) {
+    return null;
+  }
+
+  return row as UsageReservation;
+}
+
+async function reserveUsage(identity: RequestIdentity, count: number) {
   if (count <= 0) {
     return;
   }
 
   const date = getTodayDateString();
-  const conversionsUsed = identity.conversionsUsed + count;
+  const supabase = getSupabaseAdminClient();
 
   if (identity.type === "guest") {
-    guestUsageStore.set(identity.key, { date, conversionsUsed });
-    const supabase = getSupabaseServerClient();
+    if (!supabase) {
+      const conversionsUsed = getMemoryGuestUsage(identity.key, date) + count;
 
-    if (supabase) {
-      await supabase.from("guest_conversion_usage").upsert(
-        {
-          guest_key: identity.key,
-          date,
-          conversions_used: conversionsUsed,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "guest_key,date" },
+      if (conversionsUsed > identity.limit) {
+        throw new RequestValidationError(
+          "Guest limit reached. Sign in to convert more images.",
+          429,
+        );
+      }
+
+      guestUsageStore.set(identity.key, { date, conversionsUsed });
+      identity.conversionsUsed = conversionsUsed;
+      return;
+    }
+
+    const { data, error } = await supabase.rpc("reserve_guest_conversion_usage", {
+      p_amount: count,
+      p_day: date,
+      p_guest_key: identity.key,
+      p_limit: identity.limit,
+    });
+    const reservation = getUsageReservation(data);
+
+    if (error || !reservation) {
+      throw new RequestValidationError("Could not reserve guest usage.", 503);
+    }
+
+    identity.conversionsUsed = reservation.conversions_used;
+
+    if (!reservation.allowed) {
+      throw new RequestValidationError(
+        "Guest limit reached. Sign in to convert more images.",
+        429,
       );
+    }
+
+    guestUsageStore.set(identity.key, {
+      date,
+      conversionsUsed: reservation.conversions_used,
+    });
+    return;
+  }
+
+  if (!supabase) {
+    throw new RequestValidationError("Could not reserve account usage.", 503);
+  }
+
+  const { data, error } = await supabase.rpc(
+    "reserve_authenticated_conversion_usage",
+    {
+      p_amount: count,
+      p_day: date,
+      p_limit: identity.limit,
+      p_user_id: identity.userId,
+    },
+  );
+  const reservation = getUsageReservation(data);
+
+  if (error || !reservation) {
+    throw new RequestValidationError("Could not reserve account usage.", 503);
+  }
+
+  identity.conversionsUsed = reservation.conversions_used;
+
+  if (!reservation.allowed) {
+    throw new RequestValidationError(
+      "You have reached your daily conversion limit.",
+      429,
+    );
+  }
+}
+
+async function releaseUsage(identity: RequestIdentity, count: number) {
+  if (count <= 0) {
+    return;
+  }
+
+  const date = getTodayDateString();
+  const supabase = getSupabaseAdminClient();
+
+  if (!supabase) {
+    if (identity.type === "guest") {
+      const conversionsUsed = Math.max(
+        getMemoryGuestUsage(identity.key, date) - count,
+        0,
+      );
+      guestUsageStore.set(identity.key, { date, conversionsUsed });
+      identity.conversionsUsed = conversionsUsed;
     }
 
     return;
   }
 
-  const supabase = getSupabaseServerClient(identity.accessToken);
-
-  if (!supabase) {
-    throw new RequestValidationError("Could not update account usage.", 503);
-  }
-
-  const { error } = await supabase.from("conversion_usage").upsert(
-    {
-      user_id: identity.userId,
-      date,
-      conversions_used: conversionsUsed,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: "user_id,date" },
-  );
+  const functionName =
+    identity.type === "guest"
+      ? "release_guest_conversion_usage"
+      : "release_authenticated_conversion_usage";
+  const parameters =
+    identity.type === "guest"
+      ? { p_amount: count, p_day: date, p_guest_key: identity.key }
+      : { p_amount: count, p_day: date, p_user_id: identity.userId };
+  const { error } = await supabase.rpc(functionName, parameters);
 
   if (error) {
-    throw new RequestValidationError("Could not update account usage.", 503);
+    console.error("Conversion usage reservation could not be released", {
+      identityType: identity.type,
+    });
   }
 }
 
@@ -444,14 +573,6 @@ function getConversionFailureMessage(error: unknown) {
   return "Could not convert this image. Try another file.";
 }
 
-function createDownloadHeaders(fileName: string, contentType: string) {
-  return {
-    "Content-Disposition": `attachment; filename="${encodeURIComponent(fileName)}"`,
-    "Content-Type": contentType,
-    "X-Converted-File-Name": encodeURIComponent(fileName),
-  };
-}
-
 async function createZip(files: ConvertedImage[]): Promise<Buffer> {
   const zip = new JSZip();
 
@@ -468,6 +589,15 @@ async function createZip(files: ConvertedImage[]): Promise<Buffer> {
 
 export async function POST(request: Request) {
   try {
+    const sizeError = rejectOversizedRequest(
+      request,
+      MAX_IMAGE_BATCH_BYTES + 1024 * 1024,
+    );
+
+    if (sizeError) {
+      return sizeError;
+    }
+
     const identity = await getRequestIdentity(request);
     enforceRateLimit(identity.key);
 
@@ -488,14 +618,13 @@ export async function POST(request: Request) {
 
     validateBatch(files, identity.policyName);
     enforceDailyLimit(identity, files.length);
+    await reserveUsage(identity, files.length);
 
     const usedNames = new Set<string>();
     const policy = CONVERSION_POLICIES[identity.policyName];
 
-    let convertedFiles: ConvertedImage[];
-
     try {
-      convertedFiles = await mapWithConcurrency(
+      const convertedFiles = await mapWithConcurrency(
         files,
         policy.maxConcurrentConversions,
         (file) =>
@@ -505,27 +634,34 @@ export async function POST(request: Request) {
             "Image processing timed out.",
           ),
       );
+
+      if (convertedFiles.length === 1) {
+        const [file] = convertedFiles;
+
+        return new NextResponse(new Uint8Array(file.buffer), {
+          headers: createDownloadHeaders(file.fileName, file.mimeType),
+        });
+      }
+
+      const zipBuffer = await createZip(convertedFiles);
+
+      return new NextResponse(new Uint8Array(zipBuffer), {
+        headers: createDownloadHeaders("converted-images.zip", "application/zip"),
+      });
     } catch (error) {
+      await releaseUsage(identity, files.length);
+
+      if (error instanceof CapacityExceededError) {
+        throw new RequestValidationError(
+          "Image processing is busy. Try again shortly.",
+          503,
+        );
+      }
+
       throw new RequestValidationError(
         getConversionFailureMessage(error),
       );
     }
-
-    await incrementUsage(identity, convertedFiles.length);
-
-    if (convertedFiles.length === 1) {
-      const [file] = convertedFiles;
-
-      return new NextResponse(new Uint8Array(file.buffer), {
-        headers: createDownloadHeaders(file.fileName, file.mimeType),
-      });
-    }
-
-    const zipBuffer = await createZip(convertedFiles);
-
-    return new NextResponse(new Uint8Array(zipBuffer), {
-      headers: createDownloadHeaders("converted-images.zip", "application/zip"),
-    });
   } catch (error) {
     const statusCode =
       error instanceof RequestValidationError ? error.statusCode : 500;

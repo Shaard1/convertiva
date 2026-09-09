@@ -8,11 +8,18 @@ import {
   getConversionJobError,
   serializeJob,
 } from "@/lib/conversion-jobs";
+import { rejectOversizedRequest } from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    const sizeError = rejectOversizedRequest(request, 251 * 1024 * 1024);
+
+    if (sizeError) {
+      return sizeError;
+    }
+
     const identity = await authenticateConversionApiRequest(request);
     const formData = await request.formData();
     const job = await createConversionJob(formData, identity);

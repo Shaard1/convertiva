@@ -1,4 +1,4 @@
-import { OutputFormat, OutputOptions } from "@/types/converter";
+import { OutputFormat } from "@/types/converter";
 
 export type ConversionEngineName =
   | "sharp"
@@ -29,7 +29,7 @@ export type ConversionTaskRequest = {
   input_format?: string;
   output_format: OutputFormat | string;
   engine?: ConversionEngineName;
-  options?: Partial<OutputOptions> & Record<string, unknown>;
+  options?: Record<string, unknown>;
 };
 
 export type ConversionJobRequest = {

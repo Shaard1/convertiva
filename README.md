@@ -109,6 +109,8 @@ Working tool APIs:
 Platform API:
 
 - `GET /api/v1/operations`
+- `GET /api/v1/health`
+- `GET /api/v1/ready`
 - `POST /api/v1/api-keys`
 - `POST /api/v1/jobs`
 - `GET /api/v1/jobs/:jobId`
@@ -151,24 +153,36 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+After updating an existing installation, run `supabase/setup.sql` again. The
+script is idempotent and installs the atomic quota functions, private guest
+usage policies, and leased job-claim functions required by the hardened API.
+
 ## Environment variables
 
 ```env
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
+GUEST_USAGE_HASH_SECRET=
 CONVERSION_PROCESSING_MODE=inline
 CONVERSION_WORKER_SECRET=
-CONVERSION_API_KEYS_REQUIRED=false
+CONVERSION_API_KEYS_REQUIRED=true
+SEVEN_ZIP_PATH=
+IMAGE_CONVERSION_CONCURRENCY=4
+BROWSER_RENDER_CONCURRENCY=2
 ```
 
 Notes:
 
 - The app still works in guest mode if Supabase values are missing
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only
+- `GUEST_USAGE_HASH_SECRET` pseudonymizes guest network identifiers; use a long random server-only value
 - `CONVERSION_PROCESSING_MODE` can be `inline` or `queued`
 - `CONVERSION_WORKER_SECRET` is required when using the worker route in production
 - `CONVERSION_API_KEYS_REQUIRED` controls whether the v1 API requires bearer API keys
+- Keep `CONVERSION_API_KEYS_REQUIRED=true` outside isolated local development
+- `SEVEN_ZIP_PATH` overrides the archive converter executable path
+- `IMAGE_CONVERSION_CONCURRENCY` and `BROWSER_RENDER_CONCURRENCY` bound CPU-heavy work per application instance
 
 ## Usage rules
 
@@ -252,6 +266,11 @@ npm run lint
 npm run build
 npm test
 ```
+
+Operational probes:
+
+- `GET /api/v1/health` confirms that the API process is alive.
+- `GET /api/v1/ready` checks database and queued-worker configuration and returns `503` when the platform is not ready to accept jobs.
 
 ## Known limitations
 

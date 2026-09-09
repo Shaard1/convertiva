@@ -5,7 +5,9 @@ import {
   createDownloadHeaders,
   decodeFormString,
   getFileExtension,
+  handleToolRequest,
   hasFileExtension,
+  rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
@@ -63,6 +65,16 @@ function buildWorkbookOutput(
 }
 
 export async function POST(request: Request) {
+  return handleToolRequest("convert_spreadsheet", "The spreadsheet could not be converted.", async () => {
+  const sizeError = rejectOversizedRequest(
+    request,
+    MAX_SPREADSHEET_BYTES + 1024 * 1024,
+  );
+
+  if (sizeError) {
+    return sizeError;
+  }
+
   const formData = await request.formData();
   const file = formData.get("file");
   const outputFormatValue = decodeFormString(formData.get("outputFormat")).toLowerCase();
@@ -101,10 +113,14 @@ export async function POST(request: Request) {
     return new Response(new Uint8Array(outputBuffer), {
       headers: createDownloadHeaders(outputFileName, contentTypes[outputFormatValue]),
     });
-  } catch {
+  } catch (error) {
+    console.error("Spreadsheet conversion failed", {
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
     return buildToolErrorResponse(
       `This spreadsheet could not be converted to ${formatLabels[outputFormatValue]}.`,
       500,
     );
   }
+  });
 }

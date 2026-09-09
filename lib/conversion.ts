@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import { CapacityLimiter, readConcurrencyLimit } from "@/lib/capacity";
 import { MAX_IMAGE_PIXELS } from "@/lib/constants";
 import { getOutputMimeType, replaceFileExtension } from "@/lib/format";
 import { OutputFormat, OutputOptions } from "@/types/converter";
@@ -10,6 +11,11 @@ export type ConvertedImage = {
 };
 
 type SharpTransformer = (image: sharp.Sharp, options: OutputOptions) => sharp.Sharp;
+
+const imageConversionCapacity = new CapacityLimiter(
+  "Image conversion",
+  readConcurrencyLimit("IMAGE_CONVERSION_CONCURRENCY", 4),
+);
 
 function buildTransformer(format: OutputFormat): SharpTransformer | null {
   switch (format) {
@@ -236,41 +242,43 @@ export async function convertImageBuffer(
   outputFormat: OutputFormat,
   options: OutputOptions,
 ): Promise<Buffer> {
-  const image = applyCommonOptions(
-    sharp(inputBuffer, { failOn: "error" }),
-    options,
-  );
-  const transformer = buildTransformer(outputFormat);
+  return imageConversionCapacity.run(async () => {
+    const image = applyCommonOptions(
+      sharp(inputBuffer, { failOn: "error" }),
+      options,
+    );
+    const transformer = buildTransformer(outputFormat);
 
-  if (transformer) {
-    return transformer(image, options).toBuffer();
-  }
+    if (transformer) {
+      return transformer(image, options).toBuffer();
+    }
 
-  if (outputFormat === "bmp") {
+    if (outputFormat === "bmp") {
+      const { data, info } = await image
+        .flatten({ background: options.backgroundColor })
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      return encodeBmpFromRgba(data, info.width, info.height);
+    }
+
+    if (outputFormat === "pdf") {
+      const { data, info } = await image
+        .flatten({ background: options.backgroundColor })
+        .jpeg({ quality: options.quality })
+        .toBuffer({ resolveWithObject: true });
+
+      return encodePdfFromJpeg(data, info.width, info.height);
+    }
+
     const { data, info } = await image
-      .flatten({ background: options.backgroundColor })
-      .ensureAlpha()
-      .raw()
+      .resize(256, 256, { fit: "inside", withoutEnlargement: true })
+      .png()
       .toBuffer({ resolveWithObject: true });
 
-    return encodeBmpFromRgba(data, info.width, info.height);
-  }
-
-  if (outputFormat === "pdf") {
-    const { data, info } = await image
-      .flatten({ background: options.backgroundColor })
-      .jpeg({ quality: options.quality })
-      .toBuffer({ resolveWithObject: true });
-
-    return encodePdfFromJpeg(data, info.width, info.height);
-  }
-
-  const { data, info } = await image
-    .resize(256, 256, { fit: "inside", withoutEnlargement: true })
-    .png()
-    .toBuffer({ resolveWithObject: true });
-
-  return encodeIcoFromPng(data, info.width, info.height);
+    return encodeIcoFromPng(data, info.width, info.height);
+  });
 }
 
 export async function convertUploadedFile(

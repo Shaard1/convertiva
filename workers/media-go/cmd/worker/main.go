@@ -11,9 +11,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -21,6 +23,9 @@ type workerConfig struct {
 	apiBaseURL       string
 	secret           string
 	pollSeconds      int
+	httpTimeout      time.Duration
+	jobTimeout       time.Duration
+	maxTransferBytes int64
 	enableProcessing bool
 }
 
@@ -28,6 +33,7 @@ type workerClient struct {
 	baseURL    string
 	secret     string
 	httpClient *http.Client
+	maxBytes   int64
 }
 
 type claimResponse struct {
@@ -83,8 +89,16 @@ func main() {
 		logger.Println("CONVERSION_WORKER_SECRET is empty; worker endpoint calls will fail in production.")
 	}
 
-	logger.Printf("starting media worker api=%s poll=%ds enabled=%t", config.apiBaseURL, config.pollSeconds, config.enableProcessing)
-	run(context.Background(), config, logger)
+	logger.Printf(
+		"starting media worker api=%s poll=%ds job_timeout=%s enabled=%t",
+		config.apiBaseURL,
+		config.pollSeconds,
+		config.jobTimeout,
+		config.enableProcessing,
+	)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	run(ctx, config, logger)
 }
 
 func loadConfig() workerConfig {
@@ -92,6 +106,9 @@ func loadConfig() workerConfig {
 		apiBaseURL:       strings.TrimRight(envOrDefault("CONVERSION_API_BASE_URL", "http://localhost:3000"), "/"),
 		secret:           os.Getenv("CONVERSION_WORKER_SECRET"),
 		pollSeconds:      readPositiveIntEnv("MEDIA_WORKER_POLL_SECONDS", 5),
+		httpTimeout:      time.Duration(readPositiveIntEnv("MEDIA_WORKER_HTTP_TIMEOUT_SECONDS", 300)) * time.Second,
+		jobTimeout:       time.Duration(readPositiveIntEnv("MEDIA_WORKER_JOB_TIMEOUT_SECONDS", 900)) * time.Second,
+		maxTransferBytes: readPositiveInt64Env("MEDIA_WORKER_MAX_TRANSFER_BYTES", 512*1024*1024),
 		enableProcessing: readBoolEnv("MEDIA_WORKER_ENABLE_PROCESSING", false),
 	}
 }
@@ -131,7 +148,11 @@ func processNextJob(ctx context.Context, config workerConfig, logger *log.Logger
 
 	logger.Printf("claimed job id=%s tool=%s engine=%s output=%s", job.ID, job.Task.Tool, job.Task.Engine, job.Task.OutputFormat)
 
-	if err := processMediaJob(ctx, client, job); err != nil {
+	jobContext, cancelJob := context.WithTimeout(ctx, config.jobTimeout)
+	err = processMediaJob(jobContext, client, job)
+	cancelJob()
+
+	if err != nil {
 		if failErr := client.failJob(ctx, job.ID, err.Error()); failErr != nil {
 			return fmt.Errorf("%w; failed to mark job failed: %v", err, failErr)
 		}
@@ -160,7 +181,7 @@ func processMediaJob(ctx context.Context, client workerClient, job *workerJob) e
 		return err
 	}
 
-	output, err := convertWithFFmpeg(ctx, job, input)
+	output, err := convertWithFFmpeg(ctx, job, input, client.maxBytes)
 	if err != nil {
 		return err
 	}
@@ -172,8 +193,9 @@ func newWorkerClient(config workerConfig) workerClient {
 	return workerClient{
 		baseURL: config.apiBaseURL,
 		secret:  config.secret,
+		maxBytes: config.maxTransferBytes,
 		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
+			Timeout: config.httpTimeout,
 		},
 	}
 }
@@ -212,6 +234,10 @@ func (client workerClient) claimNextJob(ctx context.Context) (*workerJob, error)
 }
 
 func (client workerClient) downloadInput(ctx context.Context, file workerInputFile) (downloadedInput, error) {
+	if file.Size < 0 || file.Size > client.maxBytes {
+		return downloadedInput{}, fmt.Errorf("input exceeds the worker transfer limit")
+	}
+
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, client.baseURL+file.DownloadURL, nil)
 	if err != nil {
 		return downloadedInput{}, err
@@ -225,7 +251,7 @@ func (client workerClient) downloadInput(ctx context.Context, file workerInputFi
 	}
 	defer response.Body.Close()
 
-	body, err := io.ReadAll(response.Body)
+	body, err := readLimitedBody(response.Body, client.maxBytes)
 	if err != nil {
 		return downloadedInput{}, err
 	}
@@ -247,6 +273,10 @@ func (client workerClient) downloadInput(ctx context.Context, file workerInputFi
 }
 
 func (client workerClient) completeJob(ctx context.Context, jobID string, output convertedOutput) error {
+	if int64(len(output.content)) > client.maxBytes {
+		return fmt.Errorf("output exceeds the worker transfer limit")
+	}
+
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	part, err := writer.CreateFormFile("files", output.fileName)
@@ -317,7 +347,7 @@ func (client workerClient) doJSON(request *http.Request, target any) error {
 	}
 	defer response.Body.Close()
 
-	body, err := io.ReadAll(response.Body)
+	body, err := readLimitedBody(response.Body, 1024*1024)
 	if err != nil {
 		return err
 	}
@@ -338,7 +368,12 @@ func (client workerClient) doJSON(request *http.Request, target any) error {
 	return json.Unmarshal(body, target)
 }
 
-func convertWithFFmpeg(ctx context.Context, job *workerJob, input downloadedInput) (convertedOutput, error) {
+func convertWithFFmpeg(
+	ctx context.Context,
+	job *workerJob,
+	input downloadedInput,
+	maxOutputBytes int64,
+) (convertedOutput, error) {
 	tempDir, err := os.MkdirTemp("", "convertiva-media-*")
 	if err != nil {
 		return convertedOutput{}, err
@@ -363,6 +398,15 @@ func convertWithFFmpeg(ctx context.Context, job *workerJob, input downloadedInpu
 	output, err := command.CombinedOutput()
 	if err != nil {
 		return convertedOutput{}, fmt.Errorf("ffmpeg failed: %s", trimCommandOutput(output))
+	}
+
+	outputInfo, err := os.Stat(outputPath)
+	if err != nil {
+		return convertedOutput{}, err
+	}
+
+	if outputInfo.Size() > maxOutputBytes {
+		return convertedOutput{}, fmt.Errorf("ffmpeg output exceeds the worker transfer limit")
 	}
 
 	content, err := os.ReadFile(outputPath)
@@ -619,6 +663,19 @@ func trimCommandOutput(output []byte) string {
 	return value
 }
 
+func readLimitedBody(reader io.Reader, maxBytes int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, maxBytes+1))
+	if err != nil {
+		return nil, err
+	}
+
+	if int64(len(body)) > maxBytes {
+		return nil, fmt.Errorf("response exceeds the worker transfer limit")
+	}
+
+	return body, nil
+}
+
 func envOrDefault(name string, fallback string) string {
 	value := os.Getenv(name)
 	if value == "" {
@@ -635,6 +692,20 @@ func readPositiveIntEnv(name string, fallback int) int {
 	}
 
 	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 1 {
+		return fallback
+	}
+
+	return parsed
+}
+
+func readPositiveInt64Env(name string, fallback int64) int64 {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+
+	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || parsed < 1 {
 		return fallback
 	}
