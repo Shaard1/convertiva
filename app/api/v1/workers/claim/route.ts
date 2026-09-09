@@ -1,12 +1,14 @@
-import { NextResponse } from "next/server";
+import {
+  assertRequestSize,
+  createApiSuccessResponse,
+  handleApiRequest,
+  PublicApiError,
+  readApiJson,
+} from "@/lib/api/http";
 import {
   claimNextWorkerConversionJob,
-  getConversionJobError,
 } from "@/lib/conversion-jobs";
-import {
-  createWorkerAuthErrorResponse,
-  isAuthorizedWorkerRequest,
-} from "@/lib/worker-auth";
+import { assertAuthorizedWorkerRequest } from "@/lib/worker-auth";
 import { ConversionToolName } from "@/types/conversion-platform";
 
 export const runtime = "nodejs";
@@ -24,25 +26,32 @@ function getRequestedTools(value: unknown): ConversionToolName[] {
 }
 
 export async function POST(request: Request) {
-  if (!isAuthorizedWorkerRequest(request)) {
-    return createWorkerAuthErrorResponse();
-  }
+  return handleApiRequest(
+    request,
+    "claim_worker_job",
+    "A worker job could not be claimed.",
+    async (context) => {
+      assertAuthorizedWorkerRequest(request);
+      assertRequestSize(request, 16 * 1024);
+      const body = await readApiJson(request);
 
-  try {
-    const payload = (await request.json().catch(() => ({}))) as {
-      tools?: unknown;
-    };
-    const job = await claimNextWorkerConversionJob(getRequestedTools(payload.tools));
+      if (typeof body !== "object" || body === null || Array.isArray(body)) {
+        throw new PublicApiError(
+          "INVALID_WORKER_CLAIM",
+          "The worker claim body must be a JSON object.",
+          400,
+        );
+      }
 
-    return NextResponse.json({
-      data: {
+      const payload = body as { tools?: unknown };
+      const job = await claimNextWorkerConversionJob(
+        getRequestedTools(payload.tools),
+      );
+
+      return createApiSuccessResponse(context, {
         claimed: Boolean(job),
         job: job?.data ?? null,
-      },
-    });
-  } catch (error) {
-    const { message, statusCode } = getConversionJobError(error);
-
-    return NextResponse.json({ error: message }, { status: statusCode });
-  }
+      });
+    },
+  );
 }

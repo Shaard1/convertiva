@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { PublicApiError } from "@/lib/api/http";
 
 function secretsMatch(candidate: string | null, expected: string) {
   if (!candidate) {
@@ -40,4 +41,14 @@ export function createWorkerAuthErrorResponse() {
     },
     { status: 401 },
   );
+}
+
+export function assertAuthorizedWorkerRequest(request: Request) {
+  if (!isAuthorizedWorkerRequest(request)) {
+    throw new PublicApiError(
+      "WORKER_UNAUTHORIZED",
+      "Worker authorization failed.",
+      401,
+    );
+  }
 }

@@ -1,4 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
+import {
+  getDefaultApiDailyConversionLimit,
+  getDefaultApiRateLimit,
+} from "@/lib/api/limits";
+import { PublicApiError, readApiJson } from "@/lib/api/http";
 import { getSupabaseAdminClient, isSupabaseAdminConfigured } from "@/lib/supabase-server";
 import { ConversionApiIdentity } from "@/types/conversion-platform";
 
@@ -14,14 +19,17 @@ type ApiKeyRow = {
   is_active: boolean;
   expires_at: string | null;
   last_used_at: string | null;
+  daily_conversion_limit: number;
+  rate_limit_per_minute: number;
 };
 
-export class ApiAuthError extends Error {
+export class ApiAuthError extends PublicApiError {
   constructor(
     message: string,
-    public statusCode = 401,
+    statusCode = 401,
+    code = statusCode === 503 ? "AUTH_SERVICE_UNAVAILABLE" : "INVALID_API_KEY",
   ) {
-    super(message);
+    super(code, message, statusCode);
   }
 }
 
@@ -56,6 +64,8 @@ function createDevelopmentIdentity(): ConversionApiIdentity {
     type: "development",
     userId: null,
     apiKeyId: null,
+    dailyConversionLimit: getDefaultApiDailyConversionLimit(),
+    rateLimitPerMinute: getDefaultApiRateLimit(),
   };
 }
 
@@ -93,7 +103,7 @@ export async function authenticateConversionApiRequest(
   const keyHash = hashApiKey(token);
   const { data, error } = await supabase
     .from("conversion_api_keys")
-    .select("id,user_id,key_hash,key_prefix,name,is_active,expires_at,last_used_at")
+    .select("id,user_id,key_hash,key_prefix,name,is_active,expires_at,last_used_at,daily_conversion_limit,rate_limit_per_minute")
     .eq("key_hash", keyHash)
     .maybeSingle();
 
@@ -132,6 +142,8 @@ export async function authenticateConversionApiRequest(
     type: "api_key",
     userId: apiKey.user_id,
     apiKeyId: apiKey.id,
+    dailyConversionLimit: apiKey.daily_conversion_limit,
+    rateLimitPerMinute: apiKey.rate_limit_per_minute,
   };
 }
 
@@ -168,7 +180,17 @@ export async function createConversionApiKey(request: Request) {
     throw new ApiAuthError("API key management is not configured.", 503);
   }
 
-  const body = (await request.json().catch(() => ({}))) as { name?: unknown };
+  const payload = await readApiJson(request);
+
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    throw new PublicApiError(
+      "INVALID_API_KEY_REQUEST",
+      "The API key request body must be a JSON object.",
+      400,
+    );
+  }
+
+  const body = payload as { name?: unknown };
   const name = typeof body.name === "string" && body.name.trim()
     ? body.name.trim().slice(0, 80)
     : "Default API key";

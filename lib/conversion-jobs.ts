@@ -1,19 +1,30 @@
 import {
-  CONVERSION_POLICIES,
-  SUPPORTED_INPUT_EXTENSIONS,
-  SUPPORTED_INPUT_MIME_TYPES,
-} from "@/lib/constants";
-import { CapacityExceededError } from "@/lib/capacity";
+  CapacityExceededError,
+} from "@/lib/capacity";
+import { PublicApiError } from "@/lib/api/http";
+import {
+  createJobIdempotency,
+  JobIdempotency,
+} from "@/lib/api/idempotency";
+import {
+  ApiUsageReservation,
+  releaseApiConversionUsage,
+  reserveApiConversionUsage,
+} from "@/lib/api/limits";
+import {
+  getConversionOperation,
+  IMAGE_OUTPUT_FORMATS,
+  isConversionToolName,
+  isSupportedConversionOutput,
+} from "@/lib/conversion-operations";
 import {
   canEngineHandleTool,
   getConversionEngine,
+  isConversionEngineName,
   isConversionEngineImplemented,
   isWorkerConversionEngine,
 } from "@/lib/conversion-engines";
 import { getOutputMimeType } from "@/lib/format";
-import { audioFormats } from "@/lib/formats/audioFormats";
-import { documentFormats } from "@/lib/formats/documentFormats";
-import { videoFormats } from "@/lib/formats/videoFormats";
 import { getSupabaseAdminClient } from "@/lib/supabase-server";
 import { OutputFormat, OutputOptions } from "@/types/converter";
 import {
@@ -31,84 +42,14 @@ import {
 const JOB_RETENTION_MS = 60 * 60 * 1000;
 const JOB_STORAGE_BUCKET = "conversion-platform-files";
 const MAX_JOB_TOTAL_BYTES = 250 * 1024 * 1024;
-const MAX_WORKER_OUTPUT_FILES = 50;
-const MAX_WORKER_OUTPUT_BYTES = 500 * 1024 * 1024;
+const MAX_JOB_PAYLOAD_BYTES = 16 * 1024;
+export const MAX_WORKER_OUTPUT_FILES = 50;
+export const MAX_WORKER_OUTPUT_BYTES = 500 * 1024 * 1024;
 const DEFAULT_OUTPUT_OPTIONS: OutputOptions = {
   quality: 90,
   keepMetadata: false,
   backgroundColor: "#ffffff",
 };
-
-type ToolConversionConfig = {
-  defaultEngine: ConversionEngineName;
-  outputFormats: readonly string[];
-};
-
-const archiveOutputFormats = ["zip", "7z", "tar"] as const;
-const imageOutputFormats = ["avif", "bmp", "gif", "ico", "jpg", "pdf", "png", "tiff", "webp"] as const;
-const toolInputPolicies = {
-  image: {
-    extensions: SUPPORTED_INPUT_EXTENSIONS,
-    mimePrefixes: ["image/"],
-    maxFiles: CONVERSION_POLICIES.authenticated.maxBatchFiles,
-    maxFileBytes: CONVERSION_POLICIES.authenticated.maxFileSizeBytes,
-  },
-  video: {
-    extensions: ["3g2", "3gp", "avi", "flv", "m4v", "mkv", "mov", "mp4", "mpeg", "mpg", "mts", "mxf", "ogv", "ts", "vob", "webm", "wmv"],
-    mimePrefixes: ["video/"],
-    maxFiles: 1,
-    maxFileBytes: 250 * 1024 * 1024,
-  },
-  audio: {
-    extensions: ["aac", "ac3", "aif", "aiff", "amr", "au", "caf", "flac", "m4a", "m4b", "mp3", "oga", "opus", "wav", "weba", "wma"],
-    mimePrefixes: ["audio/"],
-    maxFiles: 1,
-    maxFileBytes: 100 * 1024 * 1024,
-  },
-  document: {
-    extensions: ["csv", "doc", "docx", "html", "md", "odt", "pdf", "rtf", "txt", "xls", "xlsx"],
-    mimePrefixes: ["application/", "text/"],
-    maxFiles: 1,
-    maxFileBytes: 50 * 1024 * 1024,
-  },
-  archive: {
-    extensions: ["7z", "gz", "rar", "tar", "tgz", "zip"],
-    mimePrefixes: ["application/"],
-    maxFiles: 1,
-    maxFileBytes: 100 * 1024 * 1024,
-  },
-} satisfies Record<
-  ConversionToolName,
-  {
-    extensions: readonly string[];
-    mimePrefixes: readonly string[];
-    maxFiles: number;
-    maxFileBytes: number;
-  }
->;
-
-const toolConversionConfigs = {
-  image: {
-    defaultEngine: "sharp",
-    outputFormats: imageOutputFormats,
-  },
-  video: {
-    defaultEngine: "ffmpeg",
-    outputFormats: videoFormats.map((format) => format.toLowerCase()),
-  },
-  audio: {
-    defaultEngine: "ffmpeg",
-    outputFormats: audioFormats.map((format) => format.toLowerCase()),
-  },
-  document: {
-    defaultEngine: "libreoffice",
-    outputFormats: documentFormats.map((format) => format.toLowerCase()),
-  },
-  archive: {
-    defaultEngine: "sevenzip",
-    outputFormats: archiveOutputFormats,
-  },
-} satisfies Record<ConversionToolName, ToolConversionConfig>;
 
 type StoredConversionJob = Omit<ConversionJobRecord, "inputFiles" | "outputFiles"> & {
   userId: string | null;
@@ -118,6 +59,7 @@ type StoredConversionJob = Omit<ConversionJobRecord, "inputFiles" | "outputFiles
   inputFiles: StoredConversionJobFile[];
   outputFiles: StoredConversionJobFile[];
   outputs: StoredConversionOutput[];
+  idempotency: JobIdempotency | null;
 };
 
 const conversionJobs = new Map<string, StoredConversionJob>();
@@ -132,6 +74,9 @@ type JobRow = {
   task_payload: unknown;
   user_id: string | null;
   api_key_id: string | null;
+  idempotency_owner: string | null;
+  idempotency_key_hash: string | null;
+  request_fingerprint: string | null;
 };
 
 type JobFileRow = {
@@ -144,12 +89,15 @@ type JobFileRow = {
   storage_path: string | null;
 };
 
-class ConversionJobError extends Error {
+class ConversionJobError extends PublicApiError {
   constructor(
     message: string,
-    public statusCode = 400,
+    statusCode = 400,
+    code = statusCode >= 500
+      ? "CONVERSION_SERVICE_ERROR"
+      : "INVALID_CONVERSION_JOB",
   ) {
-    super(message);
+    super(code, message, statusCode);
   }
 }
 
@@ -168,6 +116,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
 function parseJobPayload(value: FormDataEntryValue | null): ConversionJobRequest {
   if (typeof value !== "string") {
     throw new ConversionJobError("Missing job payload.");
+  }
+
+  if (Buffer.byteLength(value, "utf8") > MAX_JOB_PAYLOAD_BYTES) {
+    throw new ConversionJobError("The job payload is too large.", 413);
   }
 
   try {
@@ -199,7 +151,7 @@ function getConvertTask(jobRequest: ConversionJobRequest): ConversionTaskRequest
 }
 
 function isConversionTool(value: unknown): value is ConversionToolName {
-  return typeof value === "string" && value in toolConversionConfigs;
+  return isConversionToolName(value);
 }
 
 function getConversionTool(task: ConversionTaskRequest): ConversionToolName {
@@ -208,16 +160,15 @@ function getConversionTool(task: ConversionTaskRequest): ConversionToolName {
 
 function getTaskEngine(task: ConversionTaskRequest): ConversionEngineName {
   const tool = getConversionTool(task);
-  return task.engine ?? toolConversionConfigs[tool].defaultEngine;
+  return task.engine ?? getConversionOperation(tool).defaultEngine;
 }
 
 function isSupportedOutputFormat(tool: ConversionToolName, value: string) {
-  const outputFormats: readonly string[] = toolConversionConfigs[tool].outputFormats;
-  return outputFormats.includes(value.toLowerCase());
+  return isSupportedConversionOutput(tool, value);
 }
 
 function isImageOutputFormat(value: string): value is OutputFormat {
-  return (imageOutputFormats as readonly string[]).includes(value);
+  return (IMAGE_OUTPUT_FORMATS as readonly string[]).includes(value);
 }
 
 function getOutputOptions(
@@ -323,12 +274,24 @@ function isConversionTask(value: unknown): value is ConversionTaskRequest {
     isObject(value) &&
     value.operation === "convert" &&
     (!("tool" in value) || isConversionTool(value.tool)) &&
-    typeof value.output_format === "string"
+    typeof value.output_format === "string" &&
+    value.output_format.trim().length > 0 &&
+    value.output_format.length <= 32 &&
+    (!("engine" in value) || isConversionEngineName(value.engine)) &&
+    (!("input_format" in value) ||
+      (typeof value.input_format === "string" && value.input_format.length <= 32)) &&
+    (!("input" in value) ||
+      typeof value.input === "string" ||
+      (Array.isArray(value.input) &&
+        value.input.length <= 50 &&
+        value.input.every((item) => typeof item === "string"))) &&
+    (!("options" in value) ||
+      (isObject(value.options) && Object.keys(value.options).length <= 30))
   );
 }
 
 function validateFiles(files: File[], tool: ConversionToolName) {
-  const policy = toolInputPolicies[tool];
+  const policy = getConversionOperation(tool).input;
 
   if (!files.length) {
     throw new ConversionJobError("At least one file is required.");
@@ -364,11 +327,8 @@ function validateFiles(files: File[], tool: ConversionToolName) {
       extension,
     );
     const hasAllowedMimeType =
-      tool === "image"
-        ? SUPPORTED_INPUT_MIME_TYPES.includes(
-            file.type as (typeof SUPPORTED_INPUT_MIME_TYPES)[number],
-          )
-        : policy.mimePrefixes.some((prefix) => file.type.startsWith(prefix));
+      Boolean(policy.mimeTypes?.includes(file.type)) ||
+      Boolean(policy.mimePrefixes?.some((prefix) => file.type.startsWith(prefix)));
     const hasGenericMimeType =
       !file.type || file.type === "application/octet-stream";
 
@@ -382,11 +342,12 @@ function createJob(
   files: File[],
   convertTask: ConversionTaskRequest,
   identity: ConversionApiIdentity,
+  idempotency: JobIdempotency | null,
 ): StoredConversionJob {
   const timestamp = nowIso();
   const job: StoredConversionJob = {
     id: `job_${crypto.randomUUID()}`,
-    status: "queued",
+    status: "uploading",
     createdAt: timestamp,
     updatedAt: timestamp,
     expiresAt: getExpiresAt(),
@@ -403,10 +364,10 @@ function createJob(
     })),
     outputFiles: [],
     outputs: [],
+    idempotency,
     error: null,
   };
 
-  conversionJobs.set(job.id, job);
   return job;
 }
 
@@ -446,6 +407,16 @@ function mapJobRow(row: JobRow, files: JobFileRow[]): StoredConversionJob {
     error: row.error,
     userId: row.user_id,
     apiKeyId: row.api_key_id,
+    idempotency:
+      row.idempotency_owner &&
+      row.idempotency_key_hash &&
+      row.request_fingerprint
+        ? {
+            owner: row.idempotency_owner,
+            keyHash: row.idempotency_key_hash,
+            requestFingerprint: row.request_fingerprint,
+          }
+        : null,
     convertTask: row.task_payload,
     inputUploads: [],
     inputFiles: files.filter((file) => file.role === "input").map(mapFileRow),
@@ -496,14 +467,69 @@ function serializeWorkerJob(job: StoredConversionJob) {
   };
 }
 
-async function persistJob(job: StoredConversionJob) {
+function pruneExpiredMemoryJobs() {
+  const now = Date.now();
+
+  for (const [jobId, job] of conversionJobs) {
+    if (new Date(job.expiresAt).getTime() <= now) {
+      conversionJobs.delete(jobId);
+    }
+  }
+}
+
+function findMemoryIdempotentJob(idempotency: JobIdempotency) {
+  return Array.from(conversionJobs.values()).find(
+    (job) =>
+      job.idempotency?.owner === idempotency.owner &&
+      job.idempotency.keyHash === idempotency.keyHash,
+  );
+}
+
+function isUniqueConstraintError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "23505"
+  );
+}
+
+function assertMatchingIdempotency(
+  existingJob: StoredConversionJob,
+  idempotency: JobIdempotency,
+) {
+  if (
+    existingJob.idempotency?.requestFingerprint !==
+    idempotency.requestFingerprint
+  ) {
+    throw new PublicApiError(
+      "IDEMPOTENCY_KEY_REUSED",
+      "This Idempotency-Key was already used with a different request.",
+      409,
+    );
+  }
+}
+
+async function reserveJob(job: StoredConversionJob) {
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
-    return;
+    pruneExpiredMemoryJobs();
+
+    if (job.idempotency) {
+      const existingJob = findMemoryIdempotentJob(job.idempotency);
+
+      if (existingJob) {
+        assertMatchingIdempotency(existingJob, job.idempotency);
+        return { created: false, job: existingJob };
+      }
+    }
+
+    conversionJobs.set(job.id, job);
+    return { created: true, job };
   }
 
-  const { error: jobError } = await supabase.from("conversion_platform_jobs").upsert({
+  const { error: jobError } = await supabase.from("conversion_platform_jobs").insert({
     id: job.id,
     status: job.status,
     created_at: job.createdAt,
@@ -513,29 +539,54 @@ async function persistJob(job: StoredConversionJob) {
     task_payload: job.convertTask,
     user_id: job.userId,
     api_key_id: job.apiKeyId,
+    idempotency_owner: job.idempotency?.owner ?? null,
+    idempotency_key_hash: job.idempotency?.keyHash ?? null,
+    request_fingerprint: job.idempotency?.requestFingerprint ?? null,
   });
 
-  if (jobError) {
+  if (!jobError) {
+    conversionJobs.set(job.id, job);
+    return { created: true, job };
+  }
+
+  if (!job.idempotency || !isUniqueConstraintError(jobError)) {
     throw new ConversionJobError("Could not persist the conversion job.", 503);
   }
 
-  if (job.inputFiles.length) {
-    const { error: fileError } = await supabase.from("conversion_platform_files").upsert(
-      job.inputFiles.map((file) => ({
-        id: file.id,
-        job_id: job.id,
-        role: "input",
-        file_name: file.fileName,
-        mime_type: file.mimeType,
-        size_bytes: file.size,
-        storage_path: file.storagePath,
-      })),
-    );
+  const { data: existingRow, error: existingError } = await supabase
+    .from("conversion_platform_jobs")
+    .select("id,request_fingerprint")
+    .eq("idempotency_owner", job.idempotency.owner)
+    .eq("idempotency_key_hash", job.idempotency.keyHash)
+    .maybeSingle();
 
-    if (fileError) {
-      throw new ConversionJobError("Could not persist conversion inputs.", 503);
-    }
+  if (existingError || !existingRow) {
+    throw new ConversionJobError(
+      "Could not resolve the idempotent conversion job.",
+      503,
+    );
   }
+
+  if (existingRow.request_fingerprint !== job.idempotency.requestFingerprint) {
+    throw new PublicApiError(
+      "IDEMPOTENCY_KEY_REUSED",
+      "This Idempotency-Key was already used with a different request.",
+      409,
+    );
+  }
+
+  const existingJob =
+    conversionJobs.get(existingRow.id as string) ??
+    (await loadStoredJob(existingRow.id as string));
+
+  if (!existingJob) {
+    throw new ConversionJobError(
+      "The idempotent conversion job could not be loaded.",
+      503,
+    );
+  }
+
+  return { created: false, job: existingJob };
 }
 
 async function persistJobStatus(job: StoredConversionJob) {
@@ -659,6 +710,61 @@ async function uploadInputs(job: StoredConversionJob) {
   }
 }
 
+async function rollbackJobCreation(
+  job: StoredConversionJob,
+  usageReservation: ApiUsageReservation | null,
+) {
+  conversionJobs.delete(job.id);
+  const supabase = getSupabaseAdminClient();
+  const cleanupErrors: string[] = [];
+
+  if (supabase) {
+    const storagePaths = job.inputFiles
+      .map((file) => file.storagePath)
+      .filter((path): path is string => Boolean(path));
+
+    if (storagePaths.length) {
+      const { error } = await supabase.storage
+        .from(JOB_STORAGE_BUCKET)
+        .remove(storagePaths);
+
+      if (error) {
+        cleanupErrors.push("storage_cleanup_failed");
+      }
+    }
+
+    const { error } = await supabase
+      .from("conversion_platform_jobs")
+      .delete()
+      .eq("id", job.id);
+
+    if (error) {
+      cleanupErrors.push("job_cleanup_failed");
+    }
+  }
+
+  if (usageReservation) {
+    try {
+      await releaseApiConversionUsage(usageReservation);
+    } catch {
+      cleanupErrors.push("usage_rollback_failed");
+    }
+  }
+
+  if (cleanupErrors.length) {
+    console.error(
+      JSON.stringify({
+        timestamp: nowIso(),
+        level: "error",
+        service: "conversion-jobs",
+        event: "job_creation_rollback_incomplete",
+        job_id: job.id,
+        errors: cleanupErrors,
+      }),
+    );
+  }
+}
+
 async function uploadOutputs(jobId: string, outputs: StoredConversionOutput[]) {
   const supabase = getSupabaseAdminClient();
 
@@ -699,7 +805,7 @@ async function loadStoredJob(jobId: string) {
 
   const { data: jobRow, error: jobError } = await supabase
     .from("conversion_platform_jobs")
-    .select("id,status,created_at,updated_at,expires_at,error,task_payload,user_id,api_key_id")
+    .select("id,status,created_at,updated_at,expires_at,error,task_payload,user_id,api_key_id,idempotency_owner,idempotency_key_hash,request_fingerprint")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -900,6 +1006,7 @@ function assertCanAccessJob(
 export async function createConversionJob(
   formData: FormData,
   identity: ConversionApiIdentity,
+  options: { idempotencyKey?: string | null } = {},
 ) {
   const jobRequest = parseJobPayload(formData.get("job"));
   const convertTask = getConvertTask(jobRequest);
@@ -947,22 +1054,52 @@ export async function createConversionJob(
   convertTask.output_format = normalizedOutputFormat;
   convertTask.options = normalizeTaskOptions(tool, convertTask.options);
 
-  const job = createJob(files, convertTask, identity);
-  await uploadInputs(job);
-  await persistJob(job);
-  await persistInputFiles(job);
+  const idempotency = await createJobIdempotency(
+    identity,
+    options.idempotencyKey ?? null,
+    convertTask,
+    files,
+  );
+  const candidateJob = createJob(files, convertTask, identity, idempotency);
+  const reservation = await reserveJob(candidateJob);
+
+  if (!reservation.created) {
+    return {
+      job: toPublicJob(reservation.job),
+      replayed: true,
+    };
+  }
+
+  const job = reservation.job;
+  let usageReservation: ApiUsageReservation | null = null;
+
+  try {
+    usageReservation = await reserveApiConversionUsage(identity, files.length);
+    await uploadInputs(job);
+    await persistInputFiles(job);
+    job.status = "queued";
+    job.updatedAt = nowIso();
+    await persistJobStatus(job);
+  } catch (error) {
+    await rollbackJobCreation(job, usageReservation);
+    throw error;
+  }
 
   if (getProcessingMode() === "inline") {
     await processConversionJob(job.id);
   }
 
-  return toPublicJob(job);
+  return {
+    job: toPublicJob(job),
+    replayed: false,
+  };
 }
 
 export async function getConversionJob(
   jobId: string,
   identity?: ConversionApiIdentity,
 ) {
+  pruneExpiredMemoryJobs();
   const job = conversionJobs.get(jobId);
   const storedJob = job ?? await loadStoredJob(jobId);
 
@@ -1252,15 +1389,17 @@ export async function failWorkerConversionJob(
 }
 
 export function getConversionJobError(error: unknown) {
-  if (error instanceof ConversionJobError) {
+  if (error instanceof PublicApiError) {
     return {
       message: error.message,
       statusCode: error.statusCode,
+      code: error.code,
     };
   }
 
   return {
     message: "The conversion job could not be created.",
     statusCode: 500,
+    code: "CONVERSION_SERVICE_ERROR",
   };
 }

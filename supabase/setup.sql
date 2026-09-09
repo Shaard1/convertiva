@@ -267,7 +267,7 @@ using (
 
 create table if not exists public.conversion_platform_jobs (
   id text primary key,
-  status text not null check (status in ('queued', 'processing', 'finished', 'failed')),
+  status text not null check (status in ('uploading', 'queued', 'processing', 'finished', 'failed')),
   task_payload jsonb not null default '{}'::jsonb,
   user_id uuid references auth.users(id) on delete set null,
   api_key_id uuid,
@@ -295,6 +295,40 @@ add column if not exists worker_lease_expires_at timestamptz;
 alter table public.conversion_platform_jobs
 add column if not exists attempt_count int not null default 0;
 
+alter table public.conversion_platform_jobs
+add column if not exists idempotency_owner text;
+
+alter table public.conversion_platform_jobs
+add column if not exists idempotency_key_hash text;
+
+alter table public.conversion_platform_jobs
+add column if not exists request_fingerprint text;
+
+alter table public.conversion_platform_jobs
+drop constraint if exists conversion_platform_jobs_status_check;
+
+alter table public.conversion_platform_jobs
+add constraint conversion_platform_jobs_status_check
+check (status in ('uploading', 'queued', 'processing', 'finished', 'failed'));
+
+alter table public.conversion_platform_jobs
+drop constraint if exists conversion_platform_jobs_idempotency_check;
+
+alter table public.conversion_platform_jobs
+add constraint conversion_platform_jobs_idempotency_check
+check (
+  (
+    idempotency_owner is null
+    and idempotency_key_hash is null
+    and request_fingerprint is null
+  )
+  or (
+    idempotency_owner is not null
+    and idempotency_key_hash is not null
+    and request_fingerprint is not null
+  )
+);
+
 alter table public.conversion_platform_jobs enable row level security;
 
 create table if not exists public.conversion_api_keys (
@@ -306,11 +340,33 @@ create table if not exists public.conversion_api_keys (
   is_active boolean not null default true,
   last_used_at timestamptz,
   expires_at timestamptz,
+  rate_limit_per_minute int not null default 60,
+  daily_conversion_limit int not null default 1000,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
 alter table public.conversion_api_keys enable row level security;
+
+alter table public.conversion_api_keys
+add column if not exists rate_limit_per_minute int not null default 60;
+
+alter table public.conversion_api_keys
+add column if not exists daily_conversion_limit int not null default 1000;
+
+alter table public.conversion_api_keys
+drop constraint if exists conversion_api_keys_rate_limit_check;
+
+alter table public.conversion_api_keys
+add constraint conversion_api_keys_rate_limit_check
+check (rate_limit_per_minute between 1 and 10000);
+
+alter table public.conversion_api_keys
+drop constraint if exists conversion_api_keys_daily_limit_check;
+
+alter table public.conversion_api_keys
+add constraint conversion_api_keys_daily_limit_check
+check (daily_conversion_limit between 1 and 1000000);
 
 alter table public.conversion_platform_jobs
 drop constraint if exists conversion_platform_jobs_api_key_id_fkey;
@@ -343,6 +399,10 @@ on public.conversion_platform_jobs (expires_at);
 create index if not exists conversion_platform_jobs_api_key_idx
 on public.conversion_platform_jobs (api_key_id, created_at desc);
 
+create unique index if not exists conversion_platform_jobs_idempotency_idx
+on public.conversion_platform_jobs (idempotency_owner, idempotency_key_hash)
+where idempotency_key_hash is not null;
+
 create index if not exists conversion_platform_jobs_worker_queue_idx
 on public.conversion_platform_jobs (created_at)
 where status in ('queued', 'processing');
@@ -364,6 +424,189 @@ alter table public.conversion_usage_events enable row level security;
 
 create index if not exists conversion_usage_events_api_key_idx
 on public.conversion_usage_events (api_key_id, created_at desc);
+
+create table if not exists public.conversion_api_rate_limits (
+  api_key_id uuid primary key references public.conversion_api_keys(id) on delete cascade,
+  window_started_at timestamptz not null default now(),
+  request_count int not null default 0 check (request_count >= 0)
+);
+
+alter table public.conversion_api_rate_limits enable row level security;
+
+create table if not exists public.conversion_api_daily_usage (
+  api_key_id uuid not null references public.conversion_api_keys(id) on delete cascade,
+  usage_date date not null,
+  conversions_reserved int not null default 0 check (conversions_reserved >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (api_key_id, usage_date)
+);
+
+alter table public.conversion_api_daily_usage enable row level security;
+
+create or replace function public.check_conversion_api_rate_limit(
+  p_api_key_id uuid
+)
+returns table(
+  allowed boolean,
+  limit_count int,
+  remaining_count int,
+  reset_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_limit int;
+  v_request_count int;
+  v_window_started_at timestamptz;
+  v_now timestamptz := clock_timestamp();
+begin
+  select rate_limit_per_minute
+  into v_limit
+  from public.conversion_api_keys
+  where id = p_api_key_id
+    and is_active = true
+    and (expires_at is null or expires_at > v_now);
+
+  if v_limit is null then
+    return query select false, 0, 0, v_now + interval '1 minute';
+    return;
+  end if;
+
+  insert into public.conversion_api_rate_limits (
+    api_key_id,
+    window_started_at,
+    request_count
+  )
+  values (p_api_key_id, v_now, 1)
+  on conflict (api_key_id) do update
+  set
+    window_started_at = case
+      when conversion_api_rate_limits.window_started_at <= v_now - interval '1 minute'
+        then v_now
+      else conversion_api_rate_limits.window_started_at
+    end,
+    request_count = case
+      when conversion_api_rate_limits.window_started_at <= v_now - interval '1 minute'
+        then 1
+      else conversion_api_rate_limits.request_count + 1
+    end
+  returning window_started_at, request_count
+  into v_window_started_at, v_request_count;
+
+  return query
+  select
+    v_request_count <= v_limit,
+    v_limit,
+    greatest(v_limit - v_request_count, 0),
+    v_window_started_at + interval '1 minute';
+end;
+$$;
+
+revoke all on function public.check_conversion_api_rate_limit(uuid) from public;
+revoke all on function public.check_conversion_api_rate_limit(uuid) from anon;
+revoke all on function public.check_conversion_api_rate_limit(uuid) from authenticated;
+grant execute on function public.check_conversion_api_rate_limit(uuid) to service_role;
+
+create or replace function public.reserve_conversion_api_daily_usage(
+  p_api_key_id uuid,
+  p_requested_conversions int
+)
+returns table(
+  allowed boolean,
+  limit_count int,
+  remaining_count int,
+  usage_date date
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_limit int;
+  v_reserved int;
+  v_usage_date date := (now() at time zone 'utc')::date;
+begin
+  if p_requested_conversions < 1 then
+    raise exception 'Requested conversions must be positive.';
+  end if;
+
+  select daily_conversion_limit
+  into v_limit
+  from public.conversion_api_keys
+  where id = p_api_key_id
+    and is_active = true
+    and (expires_at is null or expires_at > now());
+
+  if v_limit is null then
+    return query select false, 0, 0, v_usage_date;
+    return;
+  end if;
+
+  insert into public.conversion_api_daily_usage (
+    api_key_id,
+    usage_date,
+    conversions_reserved
+  )
+  values (p_api_key_id, v_usage_date, 0)
+  on conflict (api_key_id, usage_date) do nothing;
+
+  select daily_usage.conversions_reserved
+  into v_reserved
+  from public.conversion_api_daily_usage as daily_usage
+  where daily_usage.api_key_id = p_api_key_id
+    and daily_usage.usage_date = v_usage_date
+  for update;
+
+  if v_reserved + p_requested_conversions > v_limit then
+    return query select false, v_limit, greatest(v_limit - v_reserved, 0), v_usage_date;
+    return;
+  end if;
+
+  update public.conversion_api_daily_usage as daily_usage
+  set
+    conversions_reserved = daily_usage.conversions_reserved + p_requested_conversions,
+    updated_at = now()
+  where daily_usage.api_key_id = p_api_key_id
+    and daily_usage.usage_date = v_usage_date
+  returning daily_usage.conversions_reserved into v_reserved;
+
+  return query
+  select true, v_limit, greatest(v_limit - v_reserved, 0), v_usage_date;
+end;
+$$;
+
+revoke all on function public.reserve_conversion_api_daily_usage(uuid, int) from public;
+revoke all on function public.reserve_conversion_api_daily_usage(uuid, int) from anon;
+revoke all on function public.reserve_conversion_api_daily_usage(uuid, int) from authenticated;
+grant execute on function public.reserve_conversion_api_daily_usage(uuid, int) to service_role;
+
+create or replace function public.release_conversion_api_daily_usage(
+  p_api_key_id uuid,
+  p_usage_date date,
+  p_conversion_count int
+)
+returns void
+language sql
+security definer
+set search_path = public
+as $$
+  update public.conversion_api_daily_usage as daily_usage
+  set
+    conversions_reserved = greatest(
+      daily_usage.conversions_reserved - greatest(p_conversion_count, 0),
+      0
+    ),
+    updated_at = now()
+  where daily_usage.api_key_id = p_api_key_id
+    and daily_usage.usage_date = p_usage_date;
+$$;
+
+revoke all on function public.release_conversion_api_daily_usage(uuid, date, int) from public;
+revoke all on function public.release_conversion_api_daily_usage(uuid, date, int) from anon;
+revoke all on function public.release_conversion_api_daily_usage(uuid, date, int) from authenticated;
+grant execute on function public.release_conversion_api_daily_usage(uuid, date, int) to service_role;
 
 -- The v1 platform API writes these tables with SUPABASE_SERVICE_ROLE_KEY.
 -- Client reads should go through API routes, not direct table policies.

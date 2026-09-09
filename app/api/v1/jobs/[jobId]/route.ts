@@ -1,11 +1,15 @@
-import { NextResponse } from "next/server";
+import { authenticateConversionApiRequest } from "@/lib/api-keys";
 import {
-  authenticateConversionApiRequest,
-  getApiAuthError,
-} from "@/lib/api-keys";
+  createApiSuccessResponse,
+  handleApiRequest,
+  PublicApiError,
+} from "@/lib/api/http";
+import {
+  createRateLimitHeaders,
+  enforceApiRateLimit,
+} from "@/lib/api/limits";
 import {
   getConversionJob,
-  getConversionJobError,
   serializeJob,
 } from "@/lib/conversion-jobs";
 
@@ -17,35 +21,28 @@ type RouteContext = {
 
 export const runtime = "nodejs";
 
-export async function GET(_request: Request, context: RouteContext) {
-  try {
-    const identity = await authenticateConversionApiRequest(_request);
-    const { jobId } = await context.params;
-    const job = await getConversionJob(jobId, identity);
+export async function GET(request: Request, routeContext: RouteContext) {
+  return handleApiRequest(
+    request,
+    "get_conversion_job",
+    "The conversion job could not be loaded.",
+    async (context) => {
+      const identity = await authenticateConversionApiRequest(request);
+      const rateLimit = await enforceApiRateLimit(identity);
+      const { jobId } = await routeContext.params;
+      const job = await getConversionJob(jobId, identity);
 
-    if (!job) {
-      return NextResponse.json(
-        {
-          error: "Conversion job was not found.",
-        },
-        { status: 404 },
-      );
-    }
+      if (!job) {
+        throw new PublicApiError(
+          "CONVERSION_JOB_NOT_FOUND",
+          "Conversion job was not found.",
+          404,
+        );
+      }
 
-    return NextResponse.json(serializeJob(job));
-  } catch (error) {
-    const authError = getApiAuthError(error);
-    const conversionError = getConversionJobError(error);
-    const response =
-      authError.statusCode !== 500 || authError.message !== "API authentication failed."
-        ? authError
-        : conversionError;
-
-    return NextResponse.json(
-      {
-        error: response.message,
-      },
-      { status: response.statusCode },
-    );
-  }
+      return createApiSuccessResponse(context, serializeJob(job).data, {
+        headers: createRateLimitHeaders(rateLimit),
+      });
+    },
+  );
 }

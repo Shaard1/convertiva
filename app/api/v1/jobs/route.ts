@@ -1,51 +1,52 @@
-import { NextResponse } from "next/server";
 import {
   authenticateConversionApiRequest,
-  getApiAuthError,
 } from "@/lib/api-keys";
 import {
+  assertRequestSize,
+  createApiSuccessResponse,
+  handleApiRequest,
+  readApiFormData,
+} from "@/lib/api/http";
+import { parseIdempotencyKey } from "@/lib/api/idempotency";
+import {
+  createRateLimitHeaders,
+  enforceApiRateLimit,
+} from "@/lib/api/limits";
+import {
   createConversionJob,
-  getConversionJobError,
   serializeJob,
 } from "@/lib/conversion-jobs";
-import { rejectOversizedRequest } from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  try {
-    const sizeError = rejectOversizedRequest(request, 251 * 1024 * 1024);
-
-    if (sizeError) {
-      return sizeError;
-    }
-
+  return handleApiRequest(
+    request,
+    "create_conversion_job",
+    "The conversion job could not be created.",
+    async (context) => {
+      assertRequestSize(request, 251 * 1024 * 1024);
     const identity = await authenticateConversionApiRequest(request);
-    const formData = await request.formData();
-    const job = await createConversionJob(formData, identity);
+      const rateLimit = await enforceApiRateLimit(identity);
+      const idempotencyKey = parseIdempotencyKey(request);
+      const formData = await readApiFormData(request);
+      const { job, replayed } = await createConversionJob(formData, identity, {
+        idempotencyKey,
+      });
+      const status =
+        job.status === "uploading" || job.status === "queued"
+          ? 202
+          : job.status === "failed"
+            ? 422
+            : 201;
 
-    return NextResponse.json(serializeJob(job), {
-      status: job.status === "queued" ? 202 : job.status === "failed" ? 422 : 201,
-    });
-  } catch (error) {
-    const authError = getApiAuthError(error);
-
-    if (authError.statusCode !== 500 || authError.message !== "API authentication failed.") {
-      return NextResponse.json(
-        {
-          error: authError.message,
+      return createApiSuccessResponse(context, serializeJob(job).data, {
+        status,
+        headers: {
+          ...createRateLimitHeaders(rateLimit),
+          "Idempotency-Replayed": String(replayed),
         },
-        { status: authError.statusCode },
-      );
-    }
-
-    const { message, statusCode } = getConversionJobError(error);
-
-    return NextResponse.json(
-      {
-        error: message,
-      },
-      { status: statusCode },
-    );
-  }
+      });
+    },
+  );
 }

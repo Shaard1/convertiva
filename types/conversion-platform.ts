@@ -15,6 +15,7 @@ export type ConversionToolName =
   | "archive";
 
 export type ConversionJobStatus =
+  | "uploading"
   | "queued"
   | "processing"
   | "finished"
@@ -42,6 +43,8 @@ export type ConversionApiIdentity = {
   type: "api_key" | "development";
   userId: string | null;
   apiKeyId: string | null;
+  dailyConversionLimit: number;
+  rateLimitPerMinute: number;
 };
 
 export type ConversionJobFile = {

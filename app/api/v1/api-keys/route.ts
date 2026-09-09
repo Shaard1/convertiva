@@ -1,29 +1,21 @@
-import { NextResponse } from "next/server";
+import { createConversionApiKey } from "@/lib/api-keys";
 import {
-  createConversionApiKey,
-  getApiAuthError,
-} from "@/lib/api-keys";
+  assertRequestSize,
+  createApiSuccessResponse,
+  handleApiRequest,
+} from "@/lib/api/http";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  try {
-    const apiKey = await createConversionApiKey(request);
-
-    return NextResponse.json(
-      {
-        data: apiKey,
-      },
-      { status: 201 },
-    );
-  } catch (error) {
-    const { message, statusCode } = getApiAuthError(error);
-
-    return NextResponse.json(
-      {
-        error: message,
-      },
-      { status: statusCode },
-    );
-  }
+  return handleApiRequest(
+    request,
+    "create_api_key",
+    "The API key could not be created.",
+    async (context) => {
+      assertRequestSize(request, 16 * 1024);
+      const apiKey = await createConversionApiKey(request);
+      return createApiSuccessResponse(context, apiKey, { status: 201 });
+    },
+  );
 }

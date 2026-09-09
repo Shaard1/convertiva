@@ -71,7 +71,19 @@ const workerEngines = [
   implemented: boolean;
   tools: ConversionToolName[];
   supportedOperations: ["convert"];
-}>;
+}>; 
+
+const conversionEngineNames = new Set<ConversionEngineName>([
+  ...conversionEngines.keys(),
+  ...workerEngines.map((engine) => engine.name),
+  "imagemagick",
+]);
+
+export function isConversionEngineName(
+  value: unknown,
+): value is ConversionEngineName {
+  return typeof value === "string" && conversionEngineNames.has(value as ConversionEngineName);
+}
 
 export function getConversionEngine(name: ConversionEngineName = "sharp") {
   return conversionEngines.get(name) ?? null;

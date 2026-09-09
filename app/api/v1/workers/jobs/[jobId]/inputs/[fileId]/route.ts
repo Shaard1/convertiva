@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
 import {
-  getConversionJobError,
+  createApiResponseHeaders,
+  handleApiRequest,
+} from "@/lib/api/http";
+import {
   getWorkerJobInputFile,
 } from "@/lib/conversion-jobs";
-import {
-  createWorkerAuthErrorResponse,
-  isAuthorizedWorkerRequest,
-} from "@/lib/worker-auth";
+import { createDownloadHeaders } from "@/lib/tools/routeUtils";
+import { assertAuthorizedWorkerRequest } from "@/lib/worker-auth";
 
 type RouteContext = {
   params: Promise<{
@@ -19,27 +19,27 @@ export const runtime = "nodejs";
 
 function createInputHeaders(file: File) {
   return {
-    "Content-Disposition": `attachment; filename="${encodeURIComponent(file.name)}"`,
-    "Content-Type": file.type || "application/octet-stream",
+    ...createDownloadHeaders(
+      file.name,
+      file.type || "application/octet-stream",
+    ),
     "X-Input-File-Name": encodeURIComponent(file.name),
   };
 }
 
-export async function GET(request: Request, context: RouteContext) {
-  if (!isAuthorizedWorkerRequest(request)) {
-    return createWorkerAuthErrorResponse();
-  }
+export async function GET(request: Request, routeContext: RouteContext) {
+  return handleApiRequest(
+    request,
+    "download_worker_input",
+    "The worker input could not be downloaded.",
+    async (context) => {
+      assertAuthorizedWorkerRequest(request);
+      const { jobId, fileId } = await routeContext.params;
+      const file = await getWorkerJobInputFile(jobId, fileId);
 
-  try {
-    const { jobId, fileId } = await context.params;
-    const file = await getWorkerJobInputFile(jobId, fileId);
-
-    return new NextResponse(new Uint8Array(await file.arrayBuffer()), {
-      headers: createInputHeaders(file),
-    });
-  } catch (error) {
-    const { message, statusCode } = getConversionJobError(error);
-
-    return NextResponse.json({ error: message }, { status: statusCode });
-  }
+      return new Response(new Uint8Array(await file.arrayBuffer()), {
+        headers: createApiResponseHeaders(context, createInputHeaders(file)),
+      });
+    },
+  );
 }

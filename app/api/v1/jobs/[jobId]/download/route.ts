@@ -1,11 +1,15 @@
 import JSZip from "jszip";
-import { NextResponse } from "next/server";
+import { authenticateConversionApiRequest } from "@/lib/api-keys";
 import {
-  authenticateConversionApiRequest,
-  getApiAuthError,
-} from "@/lib/api-keys";
+  createApiResponseHeaders,
+  handleApiRequest,
+  PublicApiError,
+} from "@/lib/api/http";
 import {
-  getConversionJobError,
+  createRateLimitHeaders,
+  enforceApiRateLimit,
+} from "@/lib/api/limits";
+import {
   getConversionJobOutputs,
 } from "@/lib/conversion-jobs";
 import { createDownloadHeaders } from "@/lib/tools/routeUtils";
@@ -36,47 +40,44 @@ async function createZip(files: DownloadOutput[]) {
   });
 }
 
-export async function GET(_request: Request, context: RouteContext) {
-  try {
-    const identity = await authenticateConversionApiRequest(_request);
-    const { jobId } = await context.params;
-    const outputs = await getConversionJobOutputs(jobId, identity);
+export async function GET(request: Request, routeContext: RouteContext) {
+  return handleApiRequest(
+    request,
+    "download_conversion_job",
+    "The converted files could not be downloaded.",
+    async (context) => {
+      const identity = await authenticateConversionApiRequest(request);
+      const rateLimit = await enforceApiRateLimit(identity);
+      const { jobId } = await routeContext.params;
+      const outputs = await getConversionJobOutputs(jobId, identity);
 
-    if (!outputs) {
-      return NextResponse.json(
-        {
-          error: "Converted files are not available for this job.",
-        },
-        { status: 404 },
-      );
-    }
+      if (!outputs) {
+        throw new PublicApiError(
+          "CONVERSION_OUTPUT_NOT_FOUND",
+          "Converted files are not available for this job.",
+          404,
+        );
+      }
 
-    if (outputs.length === 1) {
-      const [file] = outputs;
+      if (outputs.length === 1) {
+        const [file] = outputs;
 
-      return new NextResponse(new Uint8Array(file.buffer), {
-        headers: createDownloadHeaders(file.fileName, file.mimeType),
+        return new Response(new Uint8Array(file.buffer), {
+          headers: createApiResponseHeaders(context, {
+            ...createDownloadHeaders(file.fileName, file.mimeType),
+            ...createRateLimitHeaders(rateLimit),
+          }),
+        });
+      }
+
+      const zipBuffer = await createZip(outputs);
+
+      return new Response(new Uint8Array(zipBuffer), {
+        headers: createApiResponseHeaders(context, {
+          ...createDownloadHeaders(`${jobId}.zip`, "application/zip"),
+          ...createRateLimitHeaders(rateLimit),
+        }),
       });
-    }
-
-    const zipBuffer = await createZip(outputs);
-
-    return new NextResponse(new Uint8Array(zipBuffer), {
-      headers: createDownloadHeaders(`${jobId}.zip`, "application/zip"),
-    });
-  } catch (error) {
-    const authError = getApiAuthError(error);
-    const conversionError = getConversionJobError(error);
-    const response =
-      authError.statusCode !== 500 || authError.message !== "API authentication failed."
-        ? authError
-        : conversionError;
-
-    return NextResponse.json(
-      {
-        error: response.message,
-      },
-      { status: response.statusCode },
-    );
-  }
+    },
+  );
 }

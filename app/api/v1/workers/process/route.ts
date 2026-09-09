@@ -1,47 +1,35 @@
-import { NextResponse } from "next/server";
 import {
-  getConversionJobError,
+  createApiSuccessResponse,
+  handleApiRequest,
+} from "@/lib/api/http";
+import {
   processNextQueuedConversionJob,
   serializeJob,
 } from "@/lib/conversion-jobs";
-import {
-  createWorkerAuthErrorResponse,
-  isAuthorizedWorkerRequest,
-} from "@/lib/worker-auth";
+import { assertAuthorizedWorkerRequest } from "@/lib/worker-auth";
 
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  if (!isAuthorizedWorkerRequest(request)) {
-    return createWorkerAuthErrorResponse();
-  }
+  return handleApiRequest(
+    request,
+    "process_inline_worker_job",
+    "The queued conversion job could not be processed.",
+    async (context) => {
+      assertAuthorizedWorkerRequest(request);
+      const job = await processNextQueuedConversionJob();
 
-  try {
-    const job = await processNextQueuedConversionJob();
-
-    if (!job) {
-      return NextResponse.json({
-        data: {
+      if (!job) {
+        return createApiSuccessResponse(context, {
           processed: false,
           job: null,
-        },
-      });
-    }
+        });
+      }
 
-    return NextResponse.json({
-      data: {
+      return createApiSuccessResponse(context, {
         processed: true,
         job: serializeJob(job).data,
-      },
-    });
-  } catch (error) {
-    const { message, statusCode } = getConversionJobError(error);
-
-    return NextResponse.json(
-      {
-        error: message,
-      },
-      { status: statusCode },
-    );
-  }
+      });
+    },
+  );
 }

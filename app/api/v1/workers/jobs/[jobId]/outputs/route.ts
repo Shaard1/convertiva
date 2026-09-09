@@ -1,13 +1,16 @@
-import { NextResponse } from "next/server";
+import {
+  assertRequestSize,
+  createApiSuccessResponse,
+  handleApiRequest,
+  PublicApiError,
+  readApiFormData,
+} from "@/lib/api/http";
 import {
   completeWorkerConversionJob,
-  getConversionJobError,
+  MAX_WORKER_OUTPUT_BYTES,
   serializeJob,
 } from "@/lib/conversion-jobs";
-import {
-  createWorkerAuthErrorResponse,
-  isAuthorizedWorkerRequest,
-} from "@/lib/worker-auth";
+import { assertAuthorizedWorkerRequest } from "@/lib/worker-auth";
 
 type RouteContext = {
   params: Promise<{
@@ -17,30 +20,32 @@ type RouteContext = {
 
 export const runtime = "nodejs";
 
-export async function POST(request: Request, context: RouteContext) {
-  if (!isAuthorizedWorkerRequest(request)) {
-    return createWorkerAuthErrorResponse();
-  }
-
-  try {
-    const { jobId } = await context.params;
-    const formData = await request.formData();
-    const entries = formData.getAll("files");
-    const files = entries.filter((entry): entry is File => entry instanceof File);
-
-    if (entries.length !== files.length) {
-      return NextResponse.json(
-        { error: "One or more worker outputs are invalid." },
-        { status: 400 },
+export async function POST(request: Request, routeContext: RouteContext) {
+  return handleApiRequest(
+    request,
+    "complete_worker_job",
+    "The worker output could not be stored.",
+    async (context) => {
+      assertAuthorizedWorkerRequest(request);
+      assertRequestSize(request, MAX_WORKER_OUTPUT_BYTES + 1024 * 1024);
+      const { jobId } = await routeContext.params;
+      const formData = await readApiFormData(request);
+      const entries = formData.getAll("files");
+      const files = entries.filter(
+        (entry): entry is File => entry instanceof File,
       );
-    }
 
-    const job = await completeWorkerConversionJob(jobId, files);
+      if (entries.length !== files.length) {
+        throw new PublicApiError(
+          "INVALID_WORKER_OUTPUT",
+          "One or more worker outputs are invalid.",
+          400,
+        );
+      }
 
-    return NextResponse.json(serializeJob(job));
-  } catch (error) {
-    const { message, statusCode } = getConversionJobError(error);
+      const job = await completeWorkerConversionJob(jobId, files);
 
-    return NextResponse.json({ error: message }, { status: statusCode });
-  }
+      return createApiSuccessResponse(context, serializeJob(job).data);
+    },
+  );
 }

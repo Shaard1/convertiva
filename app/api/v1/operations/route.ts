@@ -1,39 +1,39 @@
-import { NextResponse } from "next/server";
-import { SUPPORTED_OUTPUT_FORMATS } from "@/lib/constants";
+import {
+  createApiSuccessResponse,
+  handleApiRequest,
+} from "@/lib/api/http";
 import { listConversionEngines } from "@/lib/conversion-engines";
-import { audioFormats } from "@/lib/formats/audioFormats";
-import { documentFormats } from "@/lib/formats/documentFormats";
-import { videoFormats } from "@/lib/formats/videoFormats";
+import { listConversionOperations } from "@/lib/conversion-operations";
 
-export async function GET() {
-  const processingMode =
-    process.env.CONVERSION_PROCESSING_MODE === "queued" ? "queued" : "inline";
+export async function GET(request: Request) {
+  return handleApiRequest(
+    request,
+    "list_conversion_operations",
+    "Conversion operations could not be loaded.",
+    async (context) => {
+      const processingMode =
+        process.env.CONVERSION_PROCESSING_MODE === "queued"
+          ? "queued"
+          : "inline";
+      const converters = listConversionOperations();
 
-  return NextResponse.json(
-    {
-      data: {
+      return createApiSuccessResponse(context, {
         operations: ["convert"],
         processingMode,
-        outputFormats: {
-          image: SUPPORTED_OUTPUT_FORMATS,
-          video: videoFormats.map((format) => format.toLowerCase()),
-          audio: audioFormats.map((format) => format.toLowerCase()),
-          document: documentFormats.map((format) => format.toLowerCase()),
-          archive: ["zip", "7z", "tar"],
-        },
+        converters,
+        outputFormats: Object.fromEntries(
+          converters.map((operation) => [
+            operation.tool,
+            operation.outputFormats,
+          ]),
+        ),
         engines: listConversionEngines().map((engine) => ({
           ...engine,
           configured:
             engine.implemented &&
             (engine.mode === "inline" || processingMode === "queued"),
         })),
-      },
-    },
-    {
-      headers: {
-        "Cache-Control": "no-store",
-        "X-Content-Type-Options": "nosniff",
-      },
+      });
     },
   );
 }
