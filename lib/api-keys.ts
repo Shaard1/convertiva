@@ -107,7 +107,14 @@ export async function authenticateConversionApiRequest(
     .eq("key_hash", keyHash)
     .maybeSingle();
 
-  if (error || !data) {
+  if (error) {
+    throw new ApiAuthError(
+      "API key verification is temporarily unavailable.",
+      503,
+    );
+  }
+
+  if (!data) {
     throw new ApiAuthError("Invalid API key.");
   }
 
@@ -132,9 +139,15 @@ export async function authenticateConversionApiRequest(
       .eq("id", apiKey.id);
 
     if (updateError) {
-      console.error("API key last-used timestamp could not be updated", {
-        apiKeyId: apiKey.id,
-      });
+      console.error(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: "error",
+          service: "convertiva-api",
+          event: "api_key_last_used_update_failed",
+          api_key_id: apiKey.id,
+        }),
+      );
     }
   }
 
@@ -204,12 +217,26 @@ export async function createConversionApiKey(request: Request) {
       name,
       key_hash: hashApiKey(rawKey),
       key_prefix: keyPrefix,
+      daily_conversion_limit: getDefaultApiDailyConversionLimit(),
+      rate_limit_per_minute: getDefaultApiRateLimit(),
     })
     .select("id,name,key_prefix,created_at")
     .single();
 
-  if (error || !data) {
-    throw new ApiAuthError("Could not create API key.", 500);
+  if (error) {
+    throw new PublicApiError(
+      "API_KEY_SERVICE_UNAVAILABLE",
+      "API key creation is temporarily unavailable.",
+      503,
+    );
+  }
+
+  if (!data) {
+    throw new PublicApiError(
+      "API_KEY_CREATION_FAILED",
+      "Could not create API key.",
+      500,
+    );
   }
 
   return {

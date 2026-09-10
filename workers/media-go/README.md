@@ -1,7 +1,7 @@
 # Convertiva Media Worker
 
-This worker is the future home for media-heavy conversions that should not run
-inside a Next.js request handler.
+This worker processes media-heavy conversions outside the Next.js request
+runtime through Convertiva's authenticated worker API.
 
 ## Responsibilities
 
@@ -29,9 +29,9 @@ The worker stops gracefully on shutdown, limits response bodies and output
 files, and terminates media processing after `MEDIA_WORKER_JOB_TIMEOUT_SECONDS`.
 Keep the job timeout below the platform's worker lease duration.
 
-## Planned Platform Contract
+## Platform Contract
 
-The Next.js app remains the public API. This worker should authenticate with
+The Next.js app remains the public API. This worker authenticates with
 `CONVERSION_WORKER_SECRET` and use worker-only endpoints for job processing.
 
 ```text
@@ -39,6 +39,7 @@ POST /api/v1/workers/claim
 GET  /api/v1/workers/jobs/:jobId/inputs/:fileId
 POST /api/v1/workers/jobs/:jobId/outputs
 POST /api/v1/workers/jobs/:jobId/fail
+POST /api/v1/workers/cleanup
 ```
 
 Processing is disabled by default. Set `MEDIA_WORKER_ENABLE_PROCESSING=true`

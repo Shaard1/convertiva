@@ -33,7 +33,9 @@ test("should preserve compatibility fields and add request metadata", async () =
 
   assert.equal(response.headers.get("x-request-id"), "request-test-123");
   assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.match(response.headers.get("server-timing"), /^app;dur=\d+$/);
   assert.deepEqual(body.data, { status: "ok" });
+  assert.equal(body.error, null);
   assert.equal(body.meta.requestId, "request-test-123");
   assert.equal(body.meta.version, "v1");
 });

@@ -1,15 +1,23 @@
 # Convertiva
 
-Convertiva is a file conversion platform built with Next.js. It includes dedicated tools for images, video, audio, documents, archives, PDFs, website capture, and spreadsheet conversion, with a soft green UI, responsive layouts, light and dark mode, guest usage limits, and higher limits for signed-in users.
+**Major Update:** Convertiva is now a hardened, job-oriented file conversion platform built with Next.js. It includes dedicated tools for images, video, audio, documents, archives, PDFs, website capture, and spreadsheets, backed by a consistent public API, persistent jobs, bounded processing, and worker-ready media conversion.
+
+## Major update highlights
+
+- One source of truth for converter capabilities, engines, formats, and upload policies
+- Consistent `/api/v1` success and error envelopes with request IDs and safe public errors
+- Idempotent job creation for reliable retries without duplicate conversions
+- Atomic per-key request limits and daily conversion quotas through Supabase
+- Persistent input/output storage with bounded in-memory fallback for local development
+- Atomic worker claims, expiring leases, authenticated worker routes, and queue recovery
+- Liveness and readiness probes for deployment monitoring
+- Expanded contract, rate-limit, quota, capacity, and URL-safety tests
 
 ## Current platform
 
-Ready tools:
+Ready in-process tools:
 
 - Image Converter
-- Video Converter
-- Audio Converter
-- Document Converter
 - Spreadsheet Converter
 - Archive Converter
 - Compress PDF
@@ -20,6 +28,15 @@ Ready tools:
 - Extract Archive
 - Website to PDF
 - Website Screenshot
+
+Worker-backed tools (require the Go media worker and `ffmpeg`):
+
+- Video Converter
+- Audio Converter
+
+Interface ready, conversion engine pending:
+
+- Document Converter (`LibreOffice` worker required)
 
 Coming soon tools:
 
@@ -116,6 +133,35 @@ Platform API:
 - `GET /api/v1/jobs/:jobId`
 - `GET /api/v1/jobs/:jobId/download`
 - `POST /api/v1/workers/process`
+- `POST /api/v1/workers/claim`
+- `GET /api/v1/workers/jobs/:jobId/inputs/:fileId`
+- `POST /api/v1/workers/jobs/:jobId/outputs`
+- `POST /api/v1/workers/jobs/:jobId/fail`
+- `POST /api/v1/workers/cleanup`
+- `GET /api/v1/workers/cleanup` (Vercel Cron only)
+
+### Platform API contract
+
+Successful JSON responses use a stable envelope:
+
+```json
+{
+  "data": {},
+  "error": null,
+  "meta": {
+    "requestId": "request-id",
+    "version": "v1"
+  }
+}
+```
+
+Errors retain the original string `error` field for existing clients and add a stable machine-readable `code`. Every response includes `X-Request-ID` and `Server-Timing`; clients may supply a valid `X-Request-ID` to correlate their own logs.
+
+Send an `Idempotency-Key` header with `POST /api/v1/jobs` when a request may be retried. Reusing the same key and payload returns the original job and sets `Idempotency-Replayed: true`; reusing a key with a different payload returns `409`.
+
+Authenticated job endpoints return `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Rate-limit responses also include `Retry-After`.
+
+The worker-authenticated `POST` cleanup endpoint supports manual runs and external schedulers. Vercel Cron uses the separately authenticated `GET` endpoint and removes expired job rows and their private storage objects in bounded batches.
 
 ## Requirements
 
@@ -166,10 +212,14 @@ SUPABASE_SERVICE_ROLE_KEY=
 GUEST_USAGE_HASH_SECRET=
 CONVERSION_PROCESSING_MODE=inline
 CONVERSION_WORKER_SECRET=
+CRON_SECRET=
 CONVERSION_API_KEYS_REQUIRED=true
+CONVERSION_API_RATE_LIMIT_PER_MINUTE=60
+CONVERSION_API_DAILY_LIMIT=1000
 SEVEN_ZIP_PATH=
 IMAGE_CONVERSION_CONCURRENCY=4
 BROWSER_RENDER_CONCURRENCY=2
+TOOL_REQUEST_CONCURRENCY=4
 ```
 
 Notes:
@@ -179,10 +229,33 @@ Notes:
 - `GUEST_USAGE_HASH_SECRET` pseudonymizes guest network identifiers; use a long random server-only value
 - `CONVERSION_PROCESSING_MODE` can be `inline` or `queued`
 - `CONVERSION_WORKER_SECRET` is required when using the worker route in production
+- `CRON_SECRET` authenticates Vercel Cron independently from media workers; use a long random production-only value
 - `CONVERSION_API_KEYS_REQUIRED` controls whether the v1 API requires bearer API keys
 - Keep `CONVERSION_API_KEYS_REQUIRED=true` outside isolated local development
+- `CONVERSION_API_RATE_LIMIT_PER_MINUTE` is the default request limit assigned to newly created API keys
+- `CONVERSION_API_DAILY_LIMIT` is the default daily conversion allowance assigned to newly created API keys
 - `SEVEN_ZIP_PATH` overrides the archive converter executable path
 - `IMAGE_CONVERSION_CONCURRENCY` and `BROWSER_RENDER_CONCURRENCY` bound CPU-heavy work per application instance
+- `TOOL_REQUEST_CONCURRENCY` caps concurrent legacy tool requests per application instance to protect memory and CPU
+
+## Scheduled cleanup on Vercel
+
+The root `vercel.json` schedules `GET /api/v1/workers/cleanup` once per day at
+03:00 UTC. The daily schedule works on all Vercel plans. On Pro or Enterprise,
+change the schedule to `*/15 * * * *` if you want cleanup every 15 minutes.
+
+Before deploying, add a long random `CRON_SECRET` in Vercel under **Project
+Settings > Environment Variables** for the Production environment, then
+redeploy. Vercel automatically sends that secret as a bearer token to the
+scheduled `GET` request.
+
+The manual `POST /api/v1/workers/cleanup` endpoint remains available and uses
+`CONVERSION_WORKER_SECRET` instead:
+
+```bash
+curl -X POST https://convertiva.vercel.app/api/v1/workers/cleanup \
+  -H "Authorization: Bearer $CONVERSION_WORKER_SECRET"
+```
 
 ## Usage rules
 
@@ -279,10 +352,13 @@ Operational probes:
 - Archive conversion depends on local 7-Zip
 - OCR, CAD, and some presentation/ebook/vector/font conversions still need dedicated engines
 - Guest usage protection is not yet designed for a distributed multi-instance deployment without shared backend state
+- Durable v1 jobs, distributed API limits, and multi-instance worker claims require Supabase; the local fallback is intended for development
 
 ## Next improvements
 
 - Refactor older converter components to share more shell logic
+- Move large public API uploads to signed direct-to-storage transfers
+- Add worker heartbeats, progress reporting, cancellation, and dead-letter handling
 - Add real help, pricing, privacy, terms, and contact content
 - Add engine-backed implementations for the remaining coming-soon tools
 - Expand test coverage around the newer tool routes

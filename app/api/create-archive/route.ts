@@ -3,6 +3,7 @@ import {
   buildToolErrorResponse,
   createDownloadHeaders,
   handleToolRequest,
+  parseToolFormData,
   rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
@@ -12,14 +13,14 @@ const MAX_FILE_BYTES = 75 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 250 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  return handleToolRequest("create_archive", "The archive could not be created.", async () => {
+  return handleToolRequest(request, "create_archive", "The archive could not be created.", async () => {
   const sizeError = rejectOversizedRequest(request, MAX_TOTAL_BYTES + 1024 * 1024);
 
   if (sizeError) {
     return sizeError;
   }
 
-  const formData = await request.formData();
+  const formData = await parseToolFormData(request);
   const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
 
   if (!files.length) {

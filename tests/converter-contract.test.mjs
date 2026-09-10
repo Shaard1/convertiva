@@ -27,12 +27,44 @@ const workerFailRouteSource = await readFile(
   "app/api/v1/workers/jobs/[jobId]/fail/route.ts",
   "utf8",
 );
+const workerCleanupRouteSource = await readFile(
+  "app/api/v1/workers/cleanup/route.ts",
+  "utf8",
+);
+const cronAuthSource = await readFile("lib/cron-auth.ts", "utf8");
+const vercelConfig = JSON.parse(await readFile("vercel.json", "utf8"));
 const operationsRouteSource = await readFile("app/api/v1/operations/route.ts", "utf8");
+const apiHttpSource = await readFile("lib/api/http.ts", "utf8");
+const apiLimitsSource = await readFile("lib/api/limits.ts", "utf8");
+const idempotencySource = await readFile("lib/api/idempotency.ts", "utf8");
 const apiKeySource = await readFile("lib/api-keys.ts", "utf8");
 const jobServiceSource = await readFile("lib/conversion-jobs.ts", "utf8");
 const engineRegistrySource = await readFile("lib/conversion-engines.ts", "utf8");
+const operationRegistrySource = await readFile(
+  "lib/conversion-operations.ts",
+  "utf8",
+);
 const workerAuthSource = await readFile("lib/worker-auth.ts", "utf8");
 const supabaseSetupSource = await readFile("supabase/setup.sql", "utf8");
+const legacyToolRouteSources = await Promise.all(
+  [
+    "app/api/archive-converter/route.ts",
+    "app/api/compress-jpg/route.ts",
+    "app/api/compress-pdf/route.ts",
+    "app/api/compress-png/route.ts",
+    "app/api/convert/route.ts",
+    "app/api/convert-audio/route.ts",
+    "app/api/convert-document/route.ts",
+    "app/api/convert-video/route.ts",
+    "app/api/create-archive/route.ts",
+    "app/api/extract-archive/route.ts",
+    "app/api/import-url/route.ts",
+    "app/api/merge-pdf/route.ts",
+    "app/api/spreadsheet-converter/route.ts",
+    "app/api/website-screenshot/route.ts",
+    "app/api/website-to-pdf/route.ts",
+  ].map((path) => readFile(path, "utf8")),
+);
 
 test("limits match the requested guest and logged-in plans", () => {
   assert.match(constantsSource, /GUEST_DAILY_LIMIT\s*=\s*15/);
@@ -51,6 +83,18 @@ test("conversion API enforces request and batch protections", () => {
   assert.match(routeSource, /enforceDailyLimit\(identity,\s*files\.length\)/);
   assert.match(routeSource, /mapWithConcurrency/);
   assert.match(routeSource, /withTimeout/);
+});
+
+test("legacy tool APIs share overload protection and request correlation", () => {
+  assert.match(routeUtilsSource, /TOOL_REQUEST_CONCURRENCY/);
+  assert.match(routeUtilsSource, /CapacityLimiter/);
+  assert.match(routeUtilsSource, /X-Request-ID/);
+  assert.match(routeUtilsSource, /parseToolFormData/);
+  assert.match(routeUtilsSource, /error: message, code/);
+
+  for (const source of legacyToolRouteSources) {
+    assert.match(source, /handleToolRequest/);
+  }
 });
 
 test("conversion API returns binary downloads instead of base64 JSON payloads", () => {
@@ -76,6 +120,7 @@ test("v1 conversion platform exposes job-oriented API routes", () => {
   assert.match(workerInputRouteSource, /getWorkerJobInputFile/);
   assert.match(workerOutputRouteSource, /completeWorkerConversionJob/);
   assert.match(workerFailRouteSource, /failWorkerConversionJob/);
+  assert.match(workerCleanupRouteSource, /cleanupExpiredConversionJobs/);
   assert.match(operationsRouteSource, /listConversionEngines/);
 });
 
@@ -86,13 +131,15 @@ test("v1 jobs use an engine registry and do not expose output buffers in metadat
   assert.match(engineRegistrySource, /name:\s*"sevenzip"/);
   assert.match(engineRegistrySource, /isWorkerConversionEngine/);
   assert.match(engineRegistrySource, /getConversionEngine/);
-  assert.match(jobServiceSource, /toolConversionConfigs/);
+  assert.match(jobServiceSource, /getConversionOperation/);
+  assert.match(operationRegistrySource, /CONVERSION_OPERATIONS/);
   assert.match(jobServiceSource, /getConversionTool/);
   assert.match(jobServiceSource, /This conversion requires queued worker processing/);
   assert.match(jobServiceSource, /claimNextWorkerConversionJob/);
   assert.match(jobServiceSource, /completeWorkerConversionJob/);
   assert.match(jobServiceSource, /failWorkerConversionJob/);
-  assert.match(jobServiceSource, /status:\s*"queued"/);
+  assert.match(jobServiceSource, /status:\s*"uploading"/);
+  assert.match(jobServiceSource, /job\.status = "queued"/);
   assert.match(jobServiceSource, /status = "processing"/);
   assert.match(jobServiceSource, /status = "finished"/);
   assert.match(jobServiceSource, /CONVERSION_PROCESSING_MODE/);
@@ -105,11 +152,13 @@ test("v1 jobs use an engine registry and do not expose output buffers in metadat
 });
 
 test("v1 operations advertise tool-specific output formats and worker engines", () => {
-  assert.match(operationsRouteSource, /image:\s*SUPPORTED_OUTPUT_FORMATS/);
-  assert.match(operationsRouteSource, /video:\s*videoFormats/);
-  assert.match(operationsRouteSource, /audio:\s*audioFormats/);
-  assert.match(operationsRouteSource, /document:\s*documentFormats/);
-  assert.match(operationsRouteSource, /archive:\s*\["zip",\s*"7z",\s*"tar"\]/);
+  assert.match(operationsRouteSource, /listConversionOperations/);
+  assert.match(operationRegistrySource, /image:\s*\{/);
+  assert.match(operationRegistrySource, /video:\s*\{/);
+  assert.match(operationRegistrySource, /audio:\s*\{/);
+  assert.match(operationRegistrySource, /document:\s*\{/);
+  assert.match(operationRegistrySource, /archive:\s*\{/);
+  assert.match(operationRegistrySource, /\["zip", "7z", "tar"\]/);
   assert.match(engineRegistrySource, /mode:\s*"worker"/);
   assert.match(engineRegistrySource, /tools:\s*\["video",\s*"audio"\]/);
 });
@@ -147,11 +196,63 @@ test("v1 worker endpoint is protected for production processing", () => {
   assert.match(workerAuthSource, /authorization/);
   assert.match(workerAuthSource, /x-worker-secret/);
   assert.match(workerAuthSource, /Worker authorization failed/);
-  assert.match(workerRouteSource, /isAuthorizedWorkerRequest/);
-  assert.match(workerClaimRouteSource, /isAuthorizedWorkerRequest/);
-  assert.match(workerInputRouteSource, /isAuthorizedWorkerRequest/);
-  assert.match(workerOutputRouteSource, /isAuthorizedWorkerRequest/);
-  assert.match(workerFailRouteSource, /isAuthorizedWorkerRequest/);
+  assert.match(workerAuthSource, /assertAuthorizedWorkerRequest/);
+  assert.match(workerRouteSource, /assertAuthorizedWorkerRequest/);
+  assert.match(workerClaimRouteSource, /assertAuthorizedWorkerRequest/);
+  assert.match(workerInputRouteSource, /assertAuthorizedWorkerRequest/);
+  assert.match(workerOutputRouteSource, /assertAuthorizedWorkerRequest/);
+  assert.match(workerFailRouteSource, /assertAuthorizedWorkerRequest/);
+  assert.match(workerCleanupRouteSource, /assertAuthorizedWorkerRequest/);
+});
+
+test("expired platform jobs have a bounded authenticated cleanup path", () => {
+  assert.match(jobServiceSource, /cleanupExpiredConversionJobs/);
+  assert.match(jobServiceSource, /limit > 10/);
+  assert.match(jobServiceSource, /hasMore: jobIds\.length === limit/);
+  assert.match(jobServiceSource, /remove\(storagePaths\)/);
+  assert.match(jobServiceSource, /conversion_platform_jobs/);
+  assert.match(workerCleanupRouteSource, /handleApiRequest/);
+  assert.match(workerCleanupRouteSource, /SCHEDULED_CLEANUP_MAX_BATCHES = 10/);
+});
+
+test("Vercel cron cleanup uses GET and a dedicated secret", () => {
+  assert.match(workerCleanupRouteSource, /export async function GET/);
+  assert.match(workerCleanupRouteSource, /assertAuthorizedCronRequest/);
+  assert.match(workerCleanupRouteSource, /assertAuthorizedWorkerRequest/);
+  assert.match(cronAuthSource, /CRON_SECRET/);
+  assert.match(cronAuthSource, /getBearerSecret/);
+  assert.match(cronAuthSource, /timingSafeEqual|secretsMatch/);
+  assert.deepEqual(vercelConfig.crons, [
+    {
+      path: "/api/v1/workers/cleanup",
+      schedule: "0 3 * * *",
+    },
+  ]);
+});
+
+test("v1 routes share request IDs and backward-compatible structured errors", () => {
+  assert.match(apiHttpSource, /X-Request-ID/);
+  assert.match(apiHttpSource, /requestId/);
+  assert.match(apiHttpSource, /error:\s*error\.message/);
+  assert.match(apiHttpSource, /code:\s*error\.code/);
+  assert.match(jobRouteSource, /handleApiRequest/);
+  assert.match(jobStatusRouteSource, /handleApiRequest/);
+  assert.match(jobDownloadRouteSource, /handleApiRequest/);
+  assert.match(operationsRouteSource, /handleApiRequest/);
+});
+
+test("v1 job creation is idempotent and distributed API limits are atomic", () => {
+  assert.match(jobRouteSource, /parseIdempotencyKey/);
+  assert.match(jobServiceSource, /createJobIdempotency/);
+  assert.match(jobServiceSource, /reserveJob/);
+  assert.match(jobServiceSource, /IDEMPOTENCY_KEY_REUSED/);
+  assert.match(idempotencySource, /requestFingerprint/);
+  assert.match(apiLimitsSource, /check_conversion_api_rate_limit/);
+  assert.match(apiLimitsSource, /reserve_conversion_api_daily_usage/);
+  assert.match(supabaseSetupSource, /conversion_platform_jobs_idempotency_idx/);
+  assert.match(supabaseSetupSource, /check_conversion_api_rate_limit/);
+  assert.match(supabaseSetupSource, /reserve_conversion_api_daily_usage/);
+  assert.match(supabaseSetupSource, /for update/);
 });
 
 test("worker claims and usage reservations are atomic database operations", () => {

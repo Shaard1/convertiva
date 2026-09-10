@@ -1,23 +1,36 @@
-import { NextResponse } from "next/server";
 import {
   MEGABYTE_BYTES,
   SUPPORTED_INPUT_EXTENSIONS,
   SUPPORTED_INPUT_MIME_TYPES,
 } from "@/lib/constants";
+import { readApiJson } from "@/lib/api/http";
 import {
   fetchPublicResource,
+  PublicNetworkError,
   validatePublicHttpUrl,
 } from "@/lib/security/public-network";
-import { rejectOversizedRequest } from "@/lib/tools/routeUtils";
+import {
+  buildToolErrorResponse,
+  handleToolRequest,
+  rejectOversizedRequest,
+} from "@/lib/tools/routeUtils";
 
 export const runtime = "nodejs";
 
 const MAX_REMOTE_IMAGE_BYTES = 20 * MEGABYTE_BYTES;
-const REQUEST_TIMEOUT_MS = 12000;
+const REQUEST_TIMEOUT_MS = 12_000;
+
+function decodeUrlPathSegment(segment: string) {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return "";
+  }
+}
 
 function getFileNameFromUrl(url: URL) {
   const lastSegment = url.pathname.split("/").filter(Boolean).pop();
-  const decodedSegment = lastSegment ? decodeURIComponent(lastSegment) : "";
+  const decodedSegment = lastSegment ? decodeUrlPathSegment(lastSegment) : "";
   const hasExtension = SUPPORTED_INPUT_EXTENSIONS.some((extension) =>
     decodedSegment.toLowerCase().endsWith(`.${extension}`),
   );
@@ -33,21 +46,27 @@ function isSupportedImage(contentType: string) {
   );
 }
 
-export async function POST(request: Request) {
+async function importRemoteImage(request: Request) {
+  const sizeError = rejectOversizedRequest(request, 16 * 1024);
+
+  if (sizeError) {
+    return sizeError;
+  }
+
+  const payload = await readApiJson(request);
+
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
+    return buildToolErrorResponse("The request body must be a JSON object.");
+  }
+
+  const urlValue = (payload as { url?: unknown }).url;
+
+  if (typeof urlValue !== "string" || !urlValue.trim()) {
+    return buildToolErrorResponse("Enter an image URL.");
+  }
+
   try {
-    const sizeError = rejectOversizedRequest(request, 16 * 1024);
-
-    if (sizeError) {
-      return sizeError;
-    }
-
-    const payload = (await request.json()) as { url?: unknown };
-
-    if (typeof payload.url !== "string" || !payload.url.trim()) {
-      return NextResponse.json({ error: "Enter an image URL." }, { status: 400 });
-    }
-
-    const url = await validatePublicHttpUrl(payload.url.trim());
+    const url = await validatePublicHttpUrl(urlValue.trim());
     const resource = await fetchPublicResource(url, {
       timeoutMs: REQUEST_TIMEOUT_MS,
       maxBytes: MAX_REMOTE_IMAGE_BYTES,
@@ -58,13 +77,12 @@ export async function POST(request: Request) {
     const contentType = resource.contentType;
 
     if (!isSupportedImage(contentType)) {
-      return NextResponse.json(
-        { error: "That URL does not point to a supported image." },
-        { status: 400 },
+      return buildToolErrorResponse(
+        "That URL does not point to a supported image.",
       );
     }
 
-    return new NextResponse(new Uint8Array(Buffer.from(resource.body)), {
+    return new Response(new Uint8Array(Buffer.from(resource.body)), {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "private, no-store",
@@ -75,11 +93,19 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Could not import an image from that URL.";
+    if (error instanceof PublicNetworkError) {
+      return buildToolErrorResponse(error.message);
+    }
 
-    return NextResponse.json({ error: message }, { status: 400 });
+    throw error;
   }
+}
+
+export async function POST(request: Request) {
+  return handleToolRequest(
+    request,
+    "import_remote_image",
+    "Could not import an image from that URL.",
+    () => importRemoteImage(request),
+  );
 }

@@ -4,6 +4,7 @@ import {
   buildToolErrorResponse,
   handleToolRequest,
   hasFileExtension,
+  parseToolFormData,
   rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
@@ -36,14 +37,14 @@ async function readEntryBounded(
 }
 
 export async function POST(request: Request) {
-  return handleToolRequest("extract_archive", "The archive could not be extracted.", async () => {
+  return handleToolRequest(request, "extract_archive", "The archive could not be extracted.", async () => {
   const sizeError = rejectOversizedRequest(request, MAX_ARCHIVE_BYTES + 1024 * 1024);
 
   if (sizeError) {
     return sizeError;
   }
 
-  const formData = await request.formData();
+  const formData = await parseToolFormData(request);
   const file = formData.get("file");
 
   if (!(file instanceof File)) {

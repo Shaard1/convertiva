@@ -10,6 +10,7 @@ import {
   createDownloadHeaders,
   decodeFormString,
   handleToolRequest,
+  parseToolFormData,
   rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
@@ -18,6 +19,7 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   return handleToolRequest(
+    request,
     "website_to_pdf",
     "The website could not be exported.",
     async () => {
@@ -27,7 +29,7 @@ export async function POST(request: Request) {
         return sizeError;
       }
 
-      const formData = await request.formData();
+      const formData = await parseToolFormData(request);
       const urlValue = decodeFormString(formData.get("url"));
 
       if (!urlValue) {

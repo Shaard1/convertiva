@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { PublicApiError } from "@/lib/api/http";
 
-function secretsMatch(candidate: string | null, expected: string) {
+export function secretsMatch(candidate: string | null, expected: string) {
   if (!candidate) {
     return false;
   }
@@ -15,6 +15,14 @@ function secretsMatch(candidate: string | null, expected: string) {
   );
 }
 
+export function getBearerSecret(request: Request) {
+  const authorization = request.headers.get("authorization");
+
+  return authorization?.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : null;
+}
+
 export function isAuthorizedWorkerRequest(request: Request) {
   const workerSecret = process.env.CONVERSION_WORKER_SECRET;
 
@@ -22,11 +30,8 @@ export function isAuthorizedWorkerRequest(request: Request) {
     return process.env.NODE_ENV !== "production";
   }
 
-  const authorization = request.headers.get("authorization");
   const headerSecret = request.headers.get("x-worker-secret");
-  const bearerSecret = authorization?.startsWith("Bearer ")
-    ? authorization.slice("Bearer ".length)
-    : null;
+  const bearerSecret = getBearerSecret(request);
 
   return (
     secretsMatch(bearerSecret, workerSecret) ||

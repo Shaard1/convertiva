@@ -84,7 +84,12 @@ export function createApiResponseHeaders(
   extraHeaders?: HeadersInit,
 ) {
   const headers = new Headers(extraHeaders);
-  headers.set("Cache-Control", "no-store");
+
+  if (!headers.has("Cache-Control")) {
+    headers.set("Cache-Control", "no-store");
+  }
+
+  headers.set("Server-Timing", `app;dur=${Date.now() - context.startedAt}`);
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("X-Request-ID", context.requestId);
   return headers;
@@ -98,6 +103,7 @@ export function createApiSuccessResponse<T>(
   return Response.json(
     {
       data,
+      error: null,
       meta: {
         requestId: context.requestId,
         version: API_VERSION,

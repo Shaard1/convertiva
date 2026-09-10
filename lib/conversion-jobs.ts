@@ -469,11 +469,21 @@ function serializeWorkerJob(job: StoredConversionJob) {
 
 function pruneExpiredMemoryJobs() {
   const now = Date.now();
+  let deletedJobs = 0;
 
   for (const [jobId, job] of conversionJobs) {
     if (new Date(job.expiresAt).getTime() <= now) {
       conversionJobs.delete(jobId);
+      deletedJobs += 1;
     }
+  }
+
+  return deletedJobs;
+}
+
+function releasePersistedJobMemory(jobId: string) {
+  if (getSupabaseAdminClient()) {
+    conversionJobs.delete(jobId);
   }
 }
 
@@ -511,11 +521,10 @@ function assertMatchingIdempotency(
 }
 
 async function reserveJob(job: StoredConversionJob) {
+  pruneExpiredMemoryJobs();
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
-    pruneExpiredMemoryJobs();
-
     if (job.idempotency) {
       const existingJob = findMemoryIdempotentJob(job.idempotency);
 
@@ -654,10 +663,16 @@ async function recordUsageEvent(job: StoredConversionJob) {
   });
 
   if (error) {
-    console.error("Conversion usage event could not be recorded", {
-      jobId: job.id,
-      apiKeyId: job.apiKeyId,
-    });
+    console.error(
+      JSON.stringify({
+        timestamp: nowIso(),
+        level: "error",
+        service: "conversion-jobs",
+        event: "usage_event_recording_failed",
+        job_id: job.id,
+        api_key_id: job.apiKeyId,
+      }),
+    );
   }
 }
 
@@ -746,8 +761,12 @@ async function rollbackJobCreation(
   if (usageReservation) {
     try {
       await releaseApiConversionUsage(usageReservation);
-    } catch {
-      cleanupErrors.push("usage_rollback_failed");
+    } catch (error) {
+      cleanupErrors.push(
+        error instanceof PublicApiError
+          ? "usage_rollback_failed:" + error.code
+          : "usage_rollback_failed",
+      );
     }
   }
 
@@ -809,7 +828,11 @@ async function loadStoredJob(jobId: string) {
     .eq("id", jobId)
     .maybeSingle();
 
-  if (jobError || !jobRow) {
+  if (jobError) {
+    throw new ConversionJobError("Could not load the conversion job.", 503);
+  }
+
+  if (!jobRow) {
     return null;
   }
 
@@ -819,7 +842,7 @@ async function loadStoredJob(jobId: string) {
     .eq("job_id", jobId);
 
   if (fileError) {
-    return null;
+    throw new ConversionJobError("Could not load conversion job files.", 503);
   }
 
   return mapJobRow(jobRow as JobRow, (fileRows ?? []) as JobFileRow[]);
@@ -935,7 +958,11 @@ async function downloadStoredInput(
     .from(JOB_STORAGE_BUCKET)
     .download(file.storagePath);
 
-  if (error || !data) {
+  if (error) {
+    throw new ConversionJobError("Stored input is temporarily unavailable.", 503);
+  }
+
+  if (!data) {
     return null;
   }
 
@@ -957,7 +984,11 @@ async function downloadStoredOutput(
     .from(JOB_STORAGE_BUCKET)
     .download(file.storagePath);
 
-  if (error || !data) {
+  if (error) {
+    throw new ConversionJobError("Stored output is temporarily unavailable.", 503);
+  }
+
+  if (!data) {
     return null;
   }
 
@@ -1087,6 +1118,8 @@ export async function createConversionJob(
 
   if (getProcessingMode() === "inline") {
     await processConversionJob(job.id);
+  } else {
+    releasePersistedJobMemory(job.id);
   }
 
   return {
@@ -1118,11 +1151,26 @@ export async function getConversionJobOutputs(
   jobId: string,
   identity?: ConversionApiIdentity,
 ): Promise<StoredConversionOutput[] | null> {
+  pruneExpiredMemoryJobs();
   const job = conversionJobs.get(jobId);
 
   if (job?.status === "finished") {
     assertCanAccessJob(job, identity);
-    return new Date(job.expiresAt).getTime() > Date.now() ? job.outputs : null;
+
+    if (new Date(job.expiresAt).getTime() <= Date.now()) {
+      return null;
+    }
+
+    if (job.outputs.length) {
+      return job.outputs;
+    }
+
+    if (!getSupabaseAdminClient()) {
+      throw new ConversionJobError(
+        "Converted output metadata is unavailable.",
+        503,
+      );
+    }
   }
 
   const storedJob = await loadStoredJob(jobId);
@@ -1137,6 +1185,13 @@ export async function getConversionJobOutputs(
 
   assertCanAccessJob(storedJob, identity);
 
+  if (!storedJob.outputFiles.length) {
+    throw new ConversionJobError(
+      "Converted output metadata is unavailable.",
+      503,
+    );
+  }
+
   const outputs = await Promise.all(
     storedJob.outputFiles.map((file) => downloadStoredOutput(file)),
   );
@@ -1144,7 +1199,14 @@ export async function getConversionJobOutputs(
     Boolean(file),
   );
 
-  return availableOutputs.length ? availableOutputs : null;
+  if (availableOutputs.length !== storedJob.outputFiles.length) {
+    throw new ConversionJobError(
+      "One or more converted outputs are temporarily unavailable.",
+      503,
+    );
+  }
+
+  return availableOutputs;
 }
 
 async function loadJobForProcessing(jobId: string) {
@@ -1175,69 +1237,96 @@ export async function processConversionJob(jobId: string) {
     throw new ConversionJobError("Conversion job was not found.", 404);
   }
 
-  if (job.status === "finished") {
-    return toPublicJob(job);
-  }
-
-  if (job.status !== "queued" && job.status !== "processing") {
-    throw new ConversionJobError("Conversion job is not queued.", 409);
-  }
-
-  const engine = getConversionEngine(job.convertTask.engine);
-
-  if (!engine) {
-    throw new ConversionJobError(
-      "This conversion must be processed by an external worker.",
-      409,
-    );
-  }
-
-  if (!isImageOutputFormat(job.convertTask.output_format)) {
-    throw new ConversionJobError("Unsupported inline output format.");
-  }
-
-  const outputFormat = job.convertTask.output_format;
-
-  if (job.status === "queued") {
-    job.status = "processing";
-    job.updatedAt = nowIso();
-    await persistJobStatus(job);
-  }
-
   try {
-    const inputFiles = await loadJobInputFiles(job);
-    const convertedOutputs = await engine.convert(
-      inputFiles,
-      outputFormat,
-      getOutputOptions(job.convertTask.options),
-    );
-    const outputs = await uploadOutputs(job.id, convertedOutputs);
-    job.outputs = outputs;
-    job.outputFiles = outputs.map((output) => ({
-      id: output.id,
-      fileName: output.fileName,
-      mimeType: output.mimeType || getOutputMimeType(outputFormat),
-      size: output.size,
-      storagePath: output.storagePath ?? null,
-    }));
-    job.status = "finished";
-    job.updatedAt = nowIso();
-    await persistOutputFiles(job);
-    await persistJobStatus(job);
-    await recordUsageEvent(job);
-  } catch (error) {
-    const capacityExceeded = error instanceof CapacityExceededError;
-    job.status = capacityExceeded ? "queued" : "failed";
-    job.error = capacityExceeded
-      ? null
-      : error instanceof Error
-        ? error.message
-        : "Conversion failed.";
-    job.updatedAt = nowIso();
-    await persistJobStatus(job);
-  }
+    if (job.status === "finished") {
+      return toPublicJob(job);
+    }
 
-  return toPublicJob(job);
+    if (job.status !== "queued" && job.status !== "processing") {
+      throw new ConversionJobError("Conversion job is not queued.", 409);
+    }
+
+    const engine = getConversionEngine(job.convertTask.engine);
+
+    if (!engine) {
+      throw new ConversionJobError(
+        "This conversion must be processed by an external worker.",
+        409,
+      );
+    }
+
+    if (!isImageOutputFormat(job.convertTask.output_format)) {
+      throw new ConversionJobError("Unsupported inline output format.");
+    }
+
+    const outputFormat = job.convertTask.output_format;
+
+    if (job.status === "queued") {
+      job.status = "processing";
+      job.updatedAt = nowIso();
+      await persistJobStatus(job);
+    }
+
+    try {
+      const inputFiles = await loadJobInputFiles(job);
+      const convertedOutputs = await engine.convert(
+        inputFiles,
+        outputFormat,
+        getOutputOptions(job.convertTask.options),
+      );
+
+      if (!convertedOutputs.length) {
+        throw new ConversionJobError(
+          "The conversion did not produce any output files.",
+          500,
+        );
+      }
+
+      const outputs = await uploadOutputs(job.id, convertedOutputs);
+      job.outputs = outputs;
+      job.outputFiles = outputs.map((output) => ({
+        id: output.id,
+        fileName: output.fileName,
+        mimeType: output.mimeType || getOutputMimeType(outputFormat),
+        size: output.size,
+        storagePath: output.storagePath ?? null,
+      }));
+      job.status = "finished";
+      job.updatedAt = nowIso();
+      await persistOutputFiles(job);
+      await persistJobStatus(job);
+      await recordUsageEvent(job);
+    } catch (error) {
+      const capacityExceeded = error instanceof CapacityExceededError;
+      job.status = capacityExceeded ? "queued" : "failed";
+      job.error = capacityExceeded
+        ? null
+        : error instanceof PublicApiError
+          ? error.message
+          : "Conversion failed.";
+      job.updatedAt = nowIso();
+
+      if (!capacityExceeded) {
+        console.error(
+          JSON.stringify({
+            timestamp: job.updatedAt,
+            level: "error",
+            service: "conversion-jobs",
+            event: "inline_conversion_failed",
+            job_id: job.id,
+            internal_error:
+              error instanceof Error ? error.message : "Unknown error",
+          }),
+        );
+      }
+
+      await persistJobStatus(job);
+    }
+
+    return toPublicJob(job);
+  } finally {
+    releasePersistedJobMemory(job.id);
+  }
 }
 
 export async function processNextQueuedConversionJob() {
@@ -1308,62 +1397,74 @@ export async function completeWorkerConversionJob(
     throw new ConversionJobError("Conversion job was not found.", 404);
   }
 
-  if (job.status !== "processing") {
-    throw new ConversionJobError("Conversion job is not processing.", 409);
-  }
-
-  if (!files.length) {
-    throw new ConversionJobError("At least one output file is required.");
-  }
-
-  if (files.length > MAX_WORKER_OUTPUT_FILES) {
-    throw new ConversionJobError("The worker returned too many output files.", 413);
-  }
-
-  const totalOutputBytes = files.reduce((sum, file) => sum + file.size, 0);
-
-  if (totalOutputBytes > MAX_WORKER_OUTPUT_BYTES) {
-    throw new ConversionJobError("The worker output exceeds the job limit.", 413);
-  }
-
-  for (const file of files) {
-    if (
-      !file.name ||
-      file.name.length > 180 ||
-      /[\\/\u0000-\u001f]/.test(file.name)
-    ) {
-      throw new ConversionJobError("The worker returned an invalid file name.");
+  try {
+    if (job.status !== "processing") {
+      throw new ConversionJobError("Conversion job is not processing.", 409);
     }
+
+    if (!files.length) {
+      throw new ConversionJobError("At least one output file is required.");
+    }
+
+    if (files.length > MAX_WORKER_OUTPUT_FILES) {
+      throw new ConversionJobError(
+        "The worker returned too many output files.",
+        413,
+      );
+    }
+
+    const totalOutputBytes = files.reduce((sum, file) => sum + file.size, 0);
+
+    if (totalOutputBytes > MAX_WORKER_OUTPUT_BYTES) {
+      throw new ConversionJobError(
+        "The worker output exceeds the job limit.",
+        413,
+      );
+    }
+
+    for (const file of files) {
+      if (
+        !file.name ||
+        file.name.length > 180 ||
+        /[\\/\u0000-\u001f]/.test(file.name)
+      ) {
+        throw new ConversionJobError(
+          "The worker returned an invalid file name.",
+        );
+      }
+    }
+
+    const convertedOutputs = await Promise.all(
+      files.map(async (file) => ({
+        id: crypto.randomUUID(),
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        size: file.size,
+        buffer: Buffer.from(await file.arrayBuffer()),
+      })),
+    );
+    const outputs = await uploadOutputs(job.id, convertedOutputs);
+
+    job.outputs = outputs;
+    job.outputFiles = outputs.map((output) => ({
+      id: output.id,
+      fileName: output.fileName,
+      mimeType: output.mimeType,
+      size: output.size,
+      storagePath: output.storagePath ?? null,
+    }));
+    job.status = "finished";
+    job.error = null;
+    job.updatedAt = nowIso();
+
+    await persistOutputFiles(job);
+    await persistJobStatus(job);
+    await recordUsageEvent(job);
+
+    return toPublicJob(job);
+  } finally {
+    releasePersistedJobMemory(job.id);
   }
-
-  const convertedOutputs = await Promise.all(
-    files.map(async (file) => ({
-      id: crypto.randomUUID(),
-      fileName: file.name,
-      mimeType: file.type || "application/octet-stream",
-      size: file.size,
-      buffer: Buffer.from(await file.arrayBuffer()),
-    })),
-  );
-  const outputs = await uploadOutputs(job.id, convertedOutputs);
-
-  job.outputs = outputs;
-  job.outputFiles = outputs.map((output) => ({
-    id: output.id,
-    fileName: output.fileName,
-    mimeType: output.mimeType,
-    size: output.size,
-    storagePath: output.storagePath ?? null,
-  }));
-  job.status = "finished";
-  job.error = null;
-  job.updatedAt = nowIso();
-
-  await persistOutputFiles(job);
-  await persistJobStatus(job);
-  await recordUsageEvent(job);
-
-  return toPublicJob(job);
 }
 
 export async function failWorkerConversionJob(
@@ -1376,16 +1477,130 @@ export async function failWorkerConversionJob(
     throw new ConversionJobError("Conversion job was not found.", 404);
   }
 
-  if (job.status === "finished") {
-    throw new ConversionJobError("Finished jobs cannot be marked failed.", 409);
+  try {
+    if (job.status === "finished") {
+      throw new ConversionJobError(
+        "Finished jobs cannot be marked failed.",
+        409,
+      );
+    }
+
+    job.status = "failed";
+    job.error = "Conversion failed in the processing worker.";
+    job.updatedAt = nowIso();
+
+    console.error(
+      JSON.stringify({
+        timestamp: job.updatedAt,
+        level: "error",
+        service: "conversion-jobs",
+        event: "worker_conversion_failed",
+        job_id: job.id,
+        internal_error: message.slice(0, 500) || "Unknown worker error",
+      }),
+    );
+
+    await persistJobStatus(job);
+
+    return toPublicJob(job);
+  } finally {
+    releasePersistedJobMemory(job.id);
+  }
+}
+
+export async function cleanupExpiredConversionJobs(limit = 10) {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 10) {
+    throw new ConversionJobError(
+      "The cleanup batch size must be between 1 and 10.",
+    );
   }
 
-  job.status = "failed";
-  job.error = message.slice(0, 500) || "Conversion failed.";
-  job.updatedAt = nowIso();
-  await persistJobStatus(job);
+  const memoryJobsDeleted = pruneExpiredMemoryJobs();
+  const supabase = getSupabaseAdminClient();
 
-  return toPublicJob(job);
+  if (!supabase) {
+    return {
+      deletedJobs: memoryJobsDeleted,
+      deletedObjects: 0,
+      hasMore: false,
+    };
+  }
+
+  const cutoff = nowIso();
+  const { data: expiredRows, error: jobsError } = await supabase
+    .from("conversion_platform_jobs")
+    .select("id")
+    .lt("expires_at", cutoff)
+    .order("expires_at", { ascending: true })
+    .limit(limit);
+
+  if (jobsError) {
+    throw new ConversionJobError(
+      "Could not find expired conversion jobs.",
+      503,
+    );
+  }
+
+  const jobIds = (expiredRows ?? [])
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === "string");
+
+  if (!jobIds.length) {
+    return {
+      deletedJobs: memoryJobsDeleted,
+      deletedObjects: 0,
+      hasMore: false,
+    };
+  }
+
+  const { data: fileRows, error: filesError } = await supabase
+    .from("conversion_platform_files")
+    .select("storage_path")
+    .in("job_id", jobIds);
+
+  if (filesError) {
+    throw new ConversionJobError("Could not load expired job files.", 503);
+  }
+
+  const storagePaths = (fileRows ?? [])
+    .map((row) => row.storage_path)
+    .filter(
+      (path): path is string => typeof path === "string" && path.length > 0,
+    );
+
+  if (storagePaths.length) {
+    const { error: storageError } = await supabase.storage
+      .from(JOB_STORAGE_BUCKET)
+      .remove(storagePaths);
+
+    if (storageError) {
+      throw new ConversionJobError("Could not remove expired job files.", 503);
+    }
+  }
+
+  const { data: deletedRows, error: deleteError } = await supabase
+    .from("conversion_platform_jobs")
+    .delete()
+    .in("id", jobIds)
+    .lt("expires_at", cutoff)
+    .select("id");
+
+  if (deleteError) {
+    throw new ConversionJobError(
+      "Could not remove expired conversion jobs.",
+      503,
+    );
+  }
+
+  for (const jobId of jobIds) {
+    conversionJobs.delete(jobId);
+  }
+
+  return {
+    deletedJobs: memoryJobsDeleted + (deletedRows?.length ?? 0),
+    deletedObjects: storagePaths.length,
+    hasMore: jobIds.length === limit,
+  };
 }
 
 export function getConversionJobError(error: unknown) {

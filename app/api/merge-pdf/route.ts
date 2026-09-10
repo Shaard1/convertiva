@@ -4,6 +4,7 @@ import {
   createDownloadHeaders,
   handleToolRequest,
   hasFileExtension,
+  parseToolFormData,
   rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
@@ -13,14 +14,14 @@ const MAX_PDF_BYTES = 30 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 150 * 1024 * 1024;
 
 export async function POST(request: Request) {
-  return handleToolRequest("merge_pdf", "The PDF files could not be merged.", async () => {
+  return handleToolRequest(request, "merge_pdf", "The PDF files could not be merged.", async () => {
   const sizeError = rejectOversizedRequest(request, MAX_TOTAL_BYTES + 1024 * 1024);
 
   if (sizeError) {
     return sizeError;
   }
 
-  const formData = await request.formData();
+  const formData = await parseToolFormData(request);
   const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
 
   if (files.length < 2) {

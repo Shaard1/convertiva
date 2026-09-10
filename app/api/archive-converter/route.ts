@@ -7,6 +7,7 @@ import {
   decodeFormString,
   handleToolRequest,
   hasFileExtension,
+  parseToolFormData,
   rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 import {
@@ -122,14 +123,14 @@ async function validateExtractedDirectory(directory: string) {
 }
 
 export async function POST(request: Request) {
-  return handleToolRequest("convert_archive", "The archive could not be converted.", async () => {
+  return handleToolRequest(request, "convert_archive", "The archive could not be converted.", async () => {
   const sizeError = rejectOversizedRequest(request, MAX_ARCHIVE_BYTES + 1024 * 1024);
 
   if (sizeError) {
     return sizeError;
   }
 
-  const formData = await request.formData();
+  const formData = await parseToolFormData(request);
   const file = formData.get("file");
   const outputFormat = decodeFormString(formData.get("outputFormat")).toLowerCase();
 

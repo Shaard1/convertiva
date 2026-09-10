@@ -26,7 +26,7 @@ export async function POST(request: Request) {
     "The conversion job could not be created.",
     async (context) => {
       assertRequestSize(request, 251 * 1024 * 1024);
-    const identity = await authenticateConversionApiRequest(request);
+      const identity = await authenticateConversionApiRequest(request);
       const rateLimit = await enforceApiRateLimit(identity);
       const idempotencyKey = parseIdempotencyKey(request);
       const formData = await readApiFormData(request);

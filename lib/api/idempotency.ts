@@ -14,6 +14,10 @@ export type JobIdempotency = {
 const IDEMPOTENCY_KEY_PATTERN = /^[\x21-\x7e]{8,128}$/;
 
 function stableSerialize(value: unknown): string {
+  if (value === undefined) {
+    return "undefined";
+  }
+
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
@@ -58,7 +62,10 @@ async function updateFingerprintWithFile(
         break;
       }
 
-      updateFingerprint(hash, value);
+      // File metadata already includes the exact byte length. Hashing raw bytes
+      // keeps the fingerprint independent of implementation-specific stream
+      // chunk boundaries.
+      hash.update(value);
     }
   } finally {
     reader.releaseLock();

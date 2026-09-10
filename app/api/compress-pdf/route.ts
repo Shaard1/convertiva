@@ -4,6 +4,7 @@ import {
   createDownloadHeaders,
   handleToolRequest,
   hasFileExtension,
+  parseToolFormData,
   rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
@@ -13,6 +14,7 @@ const MAX_PDF_BYTES = 50 * 1024 * 1024;
 
 export async function POST(request: Request) {
   return handleToolRequest(
+    request,
     "compress_pdf",
     "The PDF could not be compressed.",
     async () => {
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
         return sizeError;
       }
 
-      const formData = await request.formData();
+      const formData = await parseToolFormData(request);
       const file = formData.get("file");
 
       if (!(file instanceof File)) {

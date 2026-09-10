@@ -17,7 +17,10 @@ import { formatFileSize, getFileExtensionLabel } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { getSupabaseAdminClient } from "@/lib/supabase-server";
 import {
+  buildToolErrorResponse,
   createDownloadHeaders,
+  handleToolRequest,
+  parseToolFormData,
   rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 import { OutputFormat, OutputOptions } from "@/types/converter";
@@ -587,7 +590,7 @@ async function createZip(files: ConvertedImage[]): Promise<Buffer> {
   });
 }
 
-export async function POST(request: Request) {
+async function convertImages(request: Request) {
   try {
     const sizeError = rejectOversizedRequest(
       request,
@@ -601,7 +604,7 @@ export async function POST(request: Request) {
     const identity = await getRequestIdentity(request);
     enforceRateLimit(identity.key);
 
-    const formData = await request.formData();
+    const formData = await parseToolFormData(request);
     const outputFormat = formData.get("outputFormat");
     const outputOptions = parseOutputOptions(formData.get("outputOptions"));
     const entries = formData.getAll("files");
@@ -666,11 +669,18 @@ export async function POST(request: Request) {
     const statusCode =
       error instanceof RequestValidationError ? error.statusCode : 500;
 
-    return NextResponse.json(
-      {
-        error: sanitizeUnexpectedError(error),
-      },
-      { status: statusCode },
+    return buildToolErrorResponse(
+      sanitizeUnexpectedError(error),
+      statusCode,
     );
   }
+}
+
+export async function POST(request: Request) {
+  return handleToolRequest(
+    request,
+    "convert_image",
+    "The images could not be converted.",
+    () => convertImages(request),
+  );
 }

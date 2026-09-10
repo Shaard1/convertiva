@@ -7,6 +7,7 @@ import {
   getFileExtension,
   handleToolRequest,
   hasFileExtension,
+  parseToolFormData,
   rejectOversizedRequest,
 } from "@/lib/tools/routeUtils";
 
@@ -65,7 +66,7 @@ function buildWorkbookOutput(
 }
 
 export async function POST(request: Request) {
-  return handleToolRequest("convert_spreadsheet", "The spreadsheet could not be converted.", async () => {
+  return handleToolRequest(request, "convert_spreadsheet", "The spreadsheet could not be converted.", async () => {
   const sizeError = rejectOversizedRequest(
     request,
     MAX_SPREADSHEET_BYTES + 1024 * 1024,
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
     return sizeError;
   }
 
-  const formData = await request.formData();
+  const formData = await parseToolFormData(request);
   const file = formData.get("file");
   const outputFormatValue = decodeFormString(formData.get("outputFormat")).toLowerCase();
 

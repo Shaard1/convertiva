@@ -1,13 +1,17 @@
-import { NextResponse } from "next/server";
+import {
+  buildToolErrorResponse,
+  handleToolRequest,
+} from "@/lib/tools/routeUtils";
 
 export async function POST(request: Request) {
-  void request;
-
-  return NextResponse.json(
-    {
-      error:
+  return handleToolRequest(
+    request,
+    "convert_audio",
+    "Audio conversion is temporarily unavailable.",
+    async () =>
+      buildToolErrorResponse(
         "Audio conversion requires the queued media worker. Use POST /api/v1/jobs.",
-    },
-    { status: 501 },
+        501,
+      ),
   );
 }
