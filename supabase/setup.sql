@@ -730,3 +730,66 @@ revoke all on function public.claim_next_inline_conversion_job() from public;
 revoke all on function public.claim_next_inline_conversion_job() from anon;
 revoke all on function public.claim_next_inline_conversion_job() from authenticated;
 grant execute on function public.claim_next_inline_conversion_job() to service_role;
+create table if not exists public.public_request_rate_limits (
+  limit_key text primary key,
+  window_started_at timestamptz not null default now(),
+  request_count int not null default 0 check (request_count >= 0),
+  expires_at timestamptz not null
+);
+
+alter table public.public_request_rate_limits enable row level security;
+
+create index if not exists public_request_rate_limits_expires_idx
+on public.public_request_rate_limits (expires_at);
+
+create or replace function public.check_public_request_rate_limit(
+  p_limit_key text,
+  p_maximum_requests int,
+  p_window_seconds int
+)
+returns table(allowed boolean, retry_after_seconds int)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_now timestamptz := clock_timestamp();
+  v_count int;
+  v_started timestamptz;
+begin
+  if length(p_limit_key) <> 64
+    or p_maximum_requests < 1 or p_maximum_requests > 10000
+    or p_window_seconds < 1 or p_window_seconds > 3600 then
+    raise exception 'Invalid rate limit request';
+  end if;
+
+  insert into public.public_request_rate_limits (
+    limit_key, window_started_at, request_count, expires_at
+  ) values (
+    p_limit_key, v_now, 1, v_now + make_interval(secs => p_window_seconds)
+  )
+  on conflict (limit_key) do update
+  set window_started_at = case
+        when public_request_rate_limits.expires_at <= v_now then v_now
+        else public_request_rate_limits.window_started_at
+      end,
+      request_count = case
+        when public_request_rate_limits.expires_at <= v_now then 1
+        else public_request_rate_limits.request_count + 1
+      end,
+      expires_at = case
+        when public_request_rate_limits.expires_at <= v_now
+          then v_now + make_interval(secs => p_window_seconds)
+        else public_request_rate_limits.expires_at
+      end
+  returning request_count, window_started_at into v_count, v_started;
+
+  return query select
+    v_count <= p_maximum_requests,
+    greatest(1, ceil(extract(epoch from (v_started + make_interval(secs => p_window_seconds) - v_now)))::int);
+end;
+$$;
+
+revoke all on table public.public_request_rate_limits from public, anon, authenticated;
+revoke all on function public.check_public_request_rate_limit(text, int, int) from public, anon, authenticated;
+grant execute on function public.check_public_request_rate_limit(text, int, int) to service_role;

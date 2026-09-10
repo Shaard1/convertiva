@@ -1,3 +1,6 @@
+import { createHash, createHmac } from "node:crypto";
+import { getSupabaseAdminClient } from "@/lib/supabase-server";
+
 export type ApiRequestContext = {
   operation: string;
   requestId: string;
@@ -13,6 +16,14 @@ type ApiHandler = (context: ApiRequestContext) => Promise<Response>;
 
 const API_VERSION = "v1";
 const REQUEST_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
+const MAX_TRACKED_CLIENTS = 10_000;
+
+type RateLimitRecord = {
+  count: number;
+  expiresAt: number;
+};
+
+const requestRateLimits = new Map<string, RateLimitRecord>();
 
 function defaultErrorCode(statusCode: number) {
   switch (statusCode) {
@@ -61,6 +72,96 @@ export function createPublicApiError(
   code = defaultErrorCode(statusCode),
 ) {
   return new PublicApiError(code, message, statusCode);
+}
+
+function getClientAddress(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || request.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+export function assertTrustedBrowserOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return;
+
+  let expectedOrigin: string;
+  try {
+    expectedOrigin = new URL(request.url).origin;
+  } catch {
+    throw new PublicApiError("INVALID_REQUEST_URL", "The request URL is invalid.", 400);
+  }
+
+  if (origin === "null" || origin !== expectedOrigin) {
+    throw new PublicApiError("CROSS_SITE_REQUEST_BLOCKED", "Cross-site requests are not allowed.", 403);
+  }
+}
+
+function getDistributedRateLimitKey(request: Request, scope: string) {
+  const value = `${scope}:${getClientAddress(request)}`;
+  const secret = process.env.GUEST_USAGE_HASH_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return secret
+    ? createHmac("sha256", secret).update(value).digest("hex")
+    : createHash("sha256").update(value).digest("hex");
+}
+
+export async function enforceRequestRateLimit(
+  request: Request,
+  scope: string,
+  maximumRequests = 30,
+  windowMs = 60_000,
+) {
+  const supabase = getSupabaseAdminClient();
+
+  if (supabase) {
+    const { data, error } = await supabase.rpc("check_public_request_rate_limit", {
+      p_limit_key: getDistributedRateLimitKey(request, scope),
+      p_maximum_requests: maximumRequests,
+      p_window_seconds: Math.max(1, Math.ceil(windowMs / 1000)),
+    });
+    const result = Array.isArray(data) ? data[0] as { allowed?: unknown; retry_after_seconds?: unknown } | undefined : undefined;
+
+    if (error || typeof result?.allowed !== "boolean") {
+      throw new PublicApiError("RATE_LIMIT_SERVICE_UNAVAILABLE", "Request validation is temporarily unavailable.", 503);
+    }
+
+    if (!result.allowed) {
+      const retryAfterSeconds = typeof result.retry_after_seconds === "number"
+        ? Math.max(1, Math.ceil(result.retry_after_seconds))
+        : 60;
+      throw new PublicApiError("RATE_LIMIT_EXCEEDED", "Too many requests. Try again shortly.", 429, retryAfterSeconds);
+    }
+
+    return;
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new PublicApiError("RATE_LIMIT_SERVICE_UNAVAILABLE", "Request validation is temporarily unavailable.", 503);
+  }
+
+  const now = Date.now();
+
+  if (requestRateLimits.size >= MAX_TRACKED_CLIENTS) {
+    for (const [key, record] of requestRateLimits) {
+      if (record.expiresAt <= now) requestRateLimits.delete(key);
+    }
+    if (requestRateLimits.size >= MAX_TRACKED_CLIENTS) {
+      const oldestKey = requestRateLimits.keys().next().value as string | undefined;
+      if (oldestKey) requestRateLimits.delete(oldestKey);
+    }
+  }
+
+  const key = `${scope}:${getClientAddress(request)}`;
+  const current = requestRateLimits.get(key);
+  if (!current || current.expiresAt <= now) {
+    requestRateLimits.set(key, { count: 1, expiresAt: now + windowMs });
+    return;
+  }
+
+  if (current.count >= maximumRequests) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((current.expiresAt - now) / 1000));
+    throw new PublicApiError("RATE_LIMIT_EXCEEDED", "Too many requests. Try again shortly.", 429, retryAfterSeconds);
+  }
+
+  current.count += 1;
 }
 
 export function createApiRequestContext(
@@ -149,7 +250,11 @@ export function assertRequestSize(request: Request, maxBytes: number) {
   const header = request.headers.get("content-length");
 
   if (!header) {
-    return;
+    throw new PublicApiError(
+      "LENGTH_REQUIRED",
+      "A valid Content-Length header is required.",
+      411,
+    );
   }
 
   const contentLength = Number(header);
@@ -258,6 +363,8 @@ export async function handleApiRequest(
   const context = createApiRequestContext(request, operation);
 
   try {
+    assertTrustedBrowserOrigin(request);
+    await enforceRequestRateLimit(request, `api:${operation}`, 60);
     return await handler(context);
   } catch (error) {
     const publicError = normalizeApiError(error, fallbackMessage);

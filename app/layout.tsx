@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import Script from "next/script";
 import "./globals.css";
 import { RouteLoadingIndicator } from "@/components/RouteLoadingIndicator";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -14,27 +16,17 @@ export const metadata: Metadata = {
   },
 };
 
-const themeScript = `
-  (function () {
-    try {
-      var storedTheme = localStorage.getItem("convertly-theme");
-      var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-      var theme = storedTheme || (prefersDark ? "dark" : "light");
-      document.documentElement.classList.toggle("dark", theme === "dark");
-      document.documentElement.dataset.theme = theme;
-    } catch (error) {}
-  })();
-`;
-
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <Script src="/theme-init.js" strategy="beforeInteractive" nonce={nonce} />
         <ThemeProvider>
           <RouteLoadingIndicator />
           {children}

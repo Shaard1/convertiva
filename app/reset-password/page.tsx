@@ -20,8 +20,8 @@ export default function ResetPasswordPage() {
     setError(null);
     setSuccess(null);
 
-    if (password.length < 6) {
-      setError("Use at least 6 characters for your password.");
+    if (password.length < 12) {
+      setError("Use at least 12 characters for your password.");
       return;
     }
 
@@ -71,9 +71,9 @@ export default function ResetPasswordPage() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
-                minLength={6}
+                minLength={12}
                 required
-                placeholder="At least 6 characters"
+                placeholder="At least 12 characters"
                 className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
               />
               <button
@@ -97,7 +97,7 @@ export default function ResetPasswordPage() {
                 type={showConfirmPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
-                minLength={6}
+                minLength={12}
                 required
                 placeholder="Repeat your password"
                 className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"

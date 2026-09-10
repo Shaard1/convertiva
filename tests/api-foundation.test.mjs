@@ -5,7 +5,8 @@ import ts from "typescript";
 
 async function importTypeScriptModule(path) {
   const source = await readFile(path, "utf8");
-  const transpiled = ts.transpileModule(source, {
+  const isolatedSource = source.replace(/^import[\s\S]*?from\s+["'][^"']+["'];\s*$/gm, "");
+  const transpiled = ts.transpileModule(isolatedSource, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ES2022,

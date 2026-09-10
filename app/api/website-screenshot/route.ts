@@ -80,11 +80,8 @@ export async function POST(request: Request) {
               "image/png",
             ),
           });
-        } catch (error) {
-          console.error("Website screenshot failed", {
-            message: error instanceof Error ? error.message : "Unknown error",
-            url: websiteUrl.toString(),
-          });
+        } catch {
+          console.error("Website screenshot failed", { event: "browser_capture_failed" });
 
           return buildToolErrorResponse(
             "The website could not be captured. Try another public URL.",

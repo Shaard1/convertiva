@@ -9,6 +9,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -85,13 +86,12 @@ func main() {
 	config := loadConfig()
 	logger := log.New(os.Stdout, "media-worker ", log.LstdFlags|log.Lmsgprefix)
 
-	if config.secret == "" {
-		logger.Println("CONVERSION_WORKER_SECRET is empty; worker endpoint calls will fail in production.")
+	if err := validateConfig(config); err != nil {
+		logger.Fatalf("invalid worker configuration: %v", err)
 	}
 
 	logger.Printf(
-		"starting media worker api=%s poll=%ds job_timeout=%s enabled=%t",
-		config.apiBaseURL,
+		"starting media worker poll=%ds job_timeout=%s enabled=%t",
 		config.pollSeconds,
 		config.jobTimeout,
 		config.enableProcessing,
@@ -99,6 +99,24 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	run(ctx, config, logger)
+}
+
+func validateConfig(config workerConfig) error {
+	parsedURL, err := url.Parse(config.apiBaseURL)
+	if err != nil || parsedURL.Host == "" || parsedURL.User != nil || parsedURL.RawQuery != "" || parsedURL.Fragment != "" {
+		return fmt.Errorf("CONVERSION_API_BASE_URL must be an absolute URL without credentials, query, or fragment")
+	}
+
+	isLoopback := parsedURL.Hostname() == "localhost" || parsedURL.Hostname() == "127.0.0.1" || parsedURL.Hostname() == "::1"
+	if parsedURL.Scheme != "https" && !(parsedURL.Scheme == "http" && isLoopback) {
+		return fmt.Errorf("CONVERSION_API_BASE_URL must use HTTPS outside local development")
+	}
+
+	if config.enableProcessing && len(config.secret) < 32 {
+		return fmt.Errorf("CONVERSION_WORKER_SECRET must contain at least 32 characters when processing is enabled")
+	}
+
+	return nil
 }
 
 func loadConfig() workerConfig {
@@ -395,9 +413,10 @@ func convertWithFFmpeg(
 	}
 
 	command := exec.CommandContext(ctx, "ffmpeg", args...)
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return convertedOutput{}, fmt.Errorf("ffmpeg failed: %s", trimCommandOutput(output))
+	command.Stdout = io.Discard
+	command.Stderr = io.Discard
+	if err := command.Run(); err != nil {
+		return convertedOutput{}, fmt.Errorf("ffmpeg conversion failed")
 	}
 
 	outputInfo, err := os.Stat(outputPath)
@@ -648,19 +667,6 @@ func outputMimeType(tool string, format string) string {
 	default:
 		return "video/" + format
 	}
-}
-
-func trimCommandOutput(output []byte) string {
-	value := strings.TrimSpace(string(output))
-	if len(value) > 500 {
-		return value[:500]
-	}
-
-	if value == "" {
-		return "no ffmpeg output"
-	}
-
-	return value
 }
 
 func readLimitedBody(reader io.Reader, maxBytes int64) ([]byte, error) {

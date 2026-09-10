@@ -94,8 +94,12 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
       return null;
     }
 
-    if (password.length < 6) {
-      return "Use at least 6 characters for your password.";
+    if (activeMode === "signup" && password.length < 12) {
+      return "Use at least 12 characters for your password.";
+    }
+
+    if (activeMode === "login" && password.length < 6) {
+      return "Enter your complete password.";
     }
 
     if (activeMode === "signup" && password !== confirmPassword) {
@@ -262,8 +266,8 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
                   onChange={(event) => setPassword(event.target.value)}
                   autoComplete={activeMode === "login" ? "current-password" : "new-password"}
                   required
-                  minLength={6}
-                  placeholder="At least 6 characters"
+                  minLength={activeMode === "signup" ? 12 : 6}
+                  placeholder={activeMode === "signup" ? "At least 12 characters" : "Your password"}
                   className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
                 />
                 <button
@@ -295,7 +299,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
                   onChange={(event) => setConfirmPassword(event.target.value)}
                   autoComplete="new-password"
                   required
-                  minLength={6}
+                  minLength={12}
                   placeholder="Repeat your password"
                   className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
                 />

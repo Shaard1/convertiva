@@ -210,6 +210,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
 GUEST_USAGE_HASH_SECRET=
+PUBLIC_URL_FETCH_ENABLED=false
 CONVERSION_PROCESSING_MODE=inline
 CONVERSION_WORKER_SECRET=
 CRON_SECRET=
@@ -227,6 +228,7 @@ Notes:
 - The app still works in guest mode if Supabase values are missing
 - `SUPABASE_SERVICE_ROLE_KEY` is server-only
 - `GUEST_USAGE_HASH_SECRET` pseudonymizes guest network identifiers; use a long random server-only value
+- `PUBLIC_URL_FETCH_ENABLED` must remain `false` until production egress rules block private, link-local, metadata, and internal networks; set it to `true` only after that control is active
 - `CONVERSION_PROCESSING_MODE` can be `inline` or `queued`
 - `CONVERSION_WORKER_SECRET` is required when using the worker route in production
 - `CRON_SECRET` authenticates Vercel Cron independently from media workers; use a long random production-only value
@@ -237,6 +239,12 @@ Notes:
 - `SEVEN_ZIP_PATH` overrides the archive converter executable path
 - `IMAGE_CONVERSION_CONCURRENCY` and `BROWSER_RENDER_CONCURRENCY` bound CPU-heavy work per application instance
 - `TOOL_REQUEST_CONCURRENCY` caps concurrent legacy tool requests per application instance to protect memory and CPU
+
+Production authentication requirements:
+
+- In Supabase Auth settings, require passwords of at least 12 characters, enable leaked-password protection and email verification, and restrict redirect URLs to the production origin.
+- Enable MFA for privileged/operator accounts. These policies are enforced by Supabase and cannot be securely replaced by client-side validation.
+- Run the complete `supabase/setup.sql` after every security schema update. Production API routes fail closed when the distributed rate-limit function is unavailable.
 
 ## Scheduled cleanup on Vercel
 

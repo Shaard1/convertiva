@@ -83,11 +83,8 @@ export async function POST(request: Request) {
           return new Response(new Uint8Array(pdf), {
             headers: createDownloadHeaders("website.pdf", "application/pdf"),
           });
-        } catch (error) {
-          console.error("Website PDF export failed", {
-            message: error instanceof Error ? error.message : "Unknown error",
-            url: websiteUrl.toString(),
-          });
+        } catch {
+          console.error("Website PDF export failed", { event: "browser_pdf_failed" });
 
           return buildToolErrorResponse(
             "The website could not be exported as a PDF. Try another public URL.",

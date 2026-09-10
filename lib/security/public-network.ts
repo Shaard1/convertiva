@@ -177,6 +177,13 @@ export async function assertPublicNetworkUrl(url: URL) {
 }
 
 export async function validatePublicHttpUrl(value: string) {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.PUBLIC_URL_FETCH_ENABLED !== "true"
+  ) {
+    throw new PublicNetworkError("Public URL fetching is not enabled on this deployment.");
+  }
+
   const url = parsePublicHttpUrl(value);
   await assertPublicNetworkUrl(url);
   return url;

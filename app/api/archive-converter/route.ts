@@ -27,6 +27,7 @@ const MAX_ARCHIVE_ENTRIES = 2_000;
 const SEVEN_ZIP_TIMEOUT_MS = 2 * 60 * 1000;
 const supportedInputExtensions = ["zip", "7z", "rar", "tar", "gz", "tgz"];
 const supportedOutputFormats = ["zip", "7z", "tar"];
+const SAFE_ARCHIVE_PATH = /^(?![\\/])(?![A-Za-z]:)(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^\u0000-\u001f\u007f]{1,512}$/;
 
 function runSevenZip(args: string[], workingDirectory: string) {
   return new Promise<void>((resolve, reject) => {
@@ -70,9 +71,81 @@ function runSevenZip(args: string[], workingDirectory: string) {
         return;
       }
 
-      finish(new Error(stderr || `7-Zip failed with exit code ${code}.`));
+      finish(new Error(`7-Zip failed with exit code ${code ?? "unknown"}.`));
     });
   });
+}
+
+function listSevenZipArchive(archivePath: string, workingDirectory: string) {
+  return new Promise<string>((resolve, reject) => {
+    const child = spawn(sevenZipExecutable, ["l", "-slt", "-ba", archivePath], {
+      cwd: workingDirectory,
+      windowsHide: true,
+    });
+    const chunks: Buffer[] = [];
+    let outputBytes = 0;
+    const timeout = setTimeout(() => child.kill(), SEVEN_ZIP_TIMEOUT_MS);
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      outputBytes += chunk.byteLength;
+      if (outputBytes > 2 * 1024 * 1024) {
+        child.kill();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    child.stderr.resume();
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.once("close", (code) => {
+      clearTimeout(timeout);
+      if (code !== 0 || outputBytes > 2 * 1024 * 1024) {
+        reject(new Error("The archive directory could not be inspected safely."));
+        return;
+      }
+      resolve(Buffer.concat(chunks, outputBytes).toString("utf8"));
+    });
+  });
+}
+
+function validateArchiveListing(listing: string) {
+  const records = listing.split(/\r?\n\r?\n/);
+  let entryCount = 0;
+  let expandedBytes = 0;
+
+  for (const record of records) {
+    const fields = new Map(
+      record.split(/\r?\n/).map((line) => {
+        const separator = line.indexOf(" = ");
+        return separator < 0 ? [line, ""] : [line.slice(0, separator), line.slice(separator + 3)];
+      }),
+    );
+    const entryPath = fields.get("Path");
+    if (!entryPath) continue;
+
+    entryCount += 1;
+    if (entryCount > MAX_ARCHIVE_ENTRIES || !SAFE_ARCHIVE_PATH.test(entryPath)) {
+      throw new Error("The archive contains unsafe or excessive entries.");
+    }
+
+    const attributes = fields.get("Attributes") ?? "";
+    if (/\bL\b/i.test(attributes)) {
+      throw new Error("Archive links are not supported.");
+    }
+
+    const size = Number(fields.get("Size") ?? 0);
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error("The archive contains an invalid entry size.");
+    }
+    expandedBytes += size;
+    if (expandedBytes > MAX_EXPANDED_BYTES) {
+      throw new Error("The expanded archive exceeds the allowed size.");
+    }
+  }
+
+  if (!entryCount) throw new Error("The archive does not contain inspectable entries.");
 }
 
 async function hasExtractedFiles(directory: string) {
@@ -161,6 +234,7 @@ export async function POST(request: Request) {
     const outputPath = join(outputDirectory, outputArchiveName);
 
     await writeFile(inputPath, Buffer.from(await file.arrayBuffer()));
+    validateArchiveListing(await listSevenZipArchive(inputPath, sourceDirectory));
     await runSevenZip(["x", "-y", inputPath, `-o${extractedPath}`], sourceDirectory);
 
     if (!(await hasExtractedFiles(extractedPath))) {
@@ -186,10 +260,8 @@ export async function POST(request: Request) {
     return new Response(new Uint8Array(buffer), {
       headers: createDownloadHeaders(outputArchiveName, "application/octet-stream"),
     });
-  } catch (error) {
-    console.error("Archive conversion failed", {
-      message: error instanceof Error ? error.message : "Unknown error",
-    });
+  } catch {
+    console.error("Archive conversion failed", { event: "archive_conversion_failed" });
     return buildToolErrorResponse("The archive could not be converted. Try another file.", 500);
   } finally {
     await cleanupTemporaryDirectory(sourceDirectory);

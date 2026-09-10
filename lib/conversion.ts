@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import sharp, { type Sharp } from "sharp";
 import { CapacityLimiter, readConcurrencyLimit } from "@/lib/capacity";
 import { MAX_IMAGE_PIXELS } from "@/lib/constants";
 import { getOutputMimeType, replaceFileExtension } from "@/lib/format";
@@ -10,7 +10,7 @@ export type ConvertedImage = {
   buffer: Buffer;
 };
 
-type SharpTransformer = (image: sharp.Sharp, options: OutputOptions) => sharp.Sharp;
+type SharpTransformer = (image: Sharp, options: OutputOptions) => Sharp;
 
 const imageConversionCapacity = new CapacityLimiter(
   "Image conversion",
@@ -43,7 +43,7 @@ function buildTransformer(format: OutputFormat): SharpTransformer | null {
   }
 }
 
-function applyCommonOptions(image: sharp.Sharp, options: OutputOptions): sharp.Sharp {
+function applyCommonOptions(image: Sharp, options: OutputOptions): Sharp {
   const fit =
     options.fitMode === "crop"
       ? "cover"

@@ -13,6 +13,11 @@ export const runtime = "nodejs";
 const MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES = 500;
 const MAX_EXTRACTED_BYTES = 250 * 1024 * 1024;
+const SAFE_ARCHIVE_PATH = /^(?![\\/])(?![A-Za-z]:)(?!.*(?:^|[\\/])\.\.(?:[\\/]|$))[^\u0000-\u001f\u007f]{1,512}$/;
+
+function hasSafeArchivePath(entryName: string) {
+  return SAFE_ARCHIVE_PATH.test(entryName);
+}
 
 async function readEntryBounded(
   entry: JSZip.JSZipObject,
@@ -68,6 +73,10 @@ export async function POST(request: Request) {
 
   if (entries.length > MAX_ARCHIVE_ENTRIES) {
     return buildToolErrorResponse("The archive contains too many files.", 413);
+  }
+
+  if (entries.some((entry) => !hasSafeArchivePath(entry.name))) {
+    return buildToolErrorResponse("The archive contains an unsafe file path.", 400);
   }
 
   if (entries.length === 1) {

@@ -5,7 +5,9 @@ import {
 } from "@/lib/capacity";
 import {
   ApiRequestContext,
+  assertTrustedBrowserOrigin,
   createApiRequestContext,
+  enforceRequestRateLimit,
   PublicApiError,
   readApiFormData,
 } from "@/lib/api/http";
@@ -124,7 +126,11 @@ export function rejectOversizedRequest(request: Request, maxBytes: number) {
   const header = request.headers.get("content-length");
 
   if (!header) {
-    return null;
+    return buildToolErrorResponse(
+      "A valid Content-Length header is required.",
+      411,
+      "LENGTH_REQUIRED",
+    );
   }
 
   const contentLength = Number(header);
@@ -180,6 +186,8 @@ export async function handleToolRequest(
   const context = createApiRequestContext(request, operation);
 
   try {
+    assertTrustedBrowserOrigin(request);
+    await enforceRequestRateLimit(request, `tool:${operation}`);
     const response = await toolRequestCapacity.run(handler);
     return withToolResponseContext(response, context);
   } catch (error) {

@@ -311,6 +311,12 @@ async function getRequestIdentity(request: Request): Promise<RequestIdentity> {
         conversionsUsed: data?.conversions_used ?? 0,
       };
     }
+
+    throw new RequestValidationError("Invalid or expired access token.", 401);
+  }
+
+  if (authorization) {
+    throw new RequestValidationError("Invalid authorization header.", 401);
   }
 
   const date = getUsageDate();

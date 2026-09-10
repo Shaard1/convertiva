@@ -9,6 +9,8 @@ import { ConversionApiIdentity } from "@/types/conversion-platform";
 
 const API_KEY_PREFIX = "cvt_live_";
 const KEY_PREVIEW_LENGTH = 14;
+const MAX_ACTIVE_API_KEYS = 10;
+const API_KEY_NAME_PATTERN = /^[^\u0000-\u001f\u007f]{1,80}$/;
 
 type ApiKeyRow = {
   id: string;
@@ -48,6 +50,10 @@ function getBearerToken(request: Request) {
 }
 
 function shouldRequireApiKeys() {
+  if (process.env.NODE_ENV === "production") {
+    return true;
+  }
+
   if (process.env.CONVERSION_API_KEYS_REQUIRED === "true") {
     return true;
   }
@@ -56,7 +62,7 @@ function shouldRequireApiKeys() {
     return false;
   }
 
-  return process.env.NODE_ENV === "production";
+  return false;
 }
 
 function createDevelopmentIdentity(): ConversionApiIdentity {
@@ -205,8 +211,30 @@ export async function createConversionApiKey(request: Request) {
 
   const body = payload as { name?: unknown };
   const name = typeof body.name === "string" && body.name.trim()
-    ? body.name.trim().slice(0, 80)
+    ? body.name.trim()
     : "Default API key";
+
+  if (!API_KEY_NAME_PATTERN.test(name)) {
+    throw new PublicApiError(
+      "INVALID_API_KEY_NAME",
+      "API key names must be 1 to 80 printable characters.",
+      400,
+    );
+  }
+
+  const { count, error: countError } = await supabase
+    .from("conversion_api_keys")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .eq("is_active", true);
+
+  if (countError) {
+    throw new PublicApiError("API_KEY_SERVICE_UNAVAILABLE", "API key creation is temporarily unavailable.", 503);
+  }
+
+  if ((count ?? 0) >= MAX_ACTIVE_API_KEYS) {
+    throw new PublicApiError("API_KEY_LIMIT_REACHED", "Revoke an existing API key before creating another.", 409);
+  }
   const rawKey = generateRawApiKey();
   const keyPrefix = rawKey.slice(0, KEY_PREVIEW_LENGTH);
 
