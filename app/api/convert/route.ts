@@ -1,5 +1,4 @@
 import { createClient } from "@supabase/supabase-js";
-import { createHash, createHmac } from "node:crypto";
 import JSZip from "jszip";
 import { NextResponse } from "next/server";
 import { CapacityExceededError } from "@/lib/capacity";
@@ -14,6 +13,13 @@ import {
 } from "@/lib/constants";
 import { convertUploadedFile, ConvertedImage } from "@/lib/conversion";
 import { formatFileSize, getFileExtensionLabel } from "@/lib/format";
+import {
+  cacheGuestUsage,
+  getGuestUsageCount,
+  getGuestUsageKey,
+  getMemoryGuestUsage,
+  getUsageDate,
+} from "@/lib/guest-usage-server";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import { getSupabaseAdminClient } from "@/lib/supabase-server";
 import {
@@ -50,17 +56,7 @@ type RateLimitRecord = {
   requestCount: number;
 };
 
-type DailyUsageRecord = {
-  date: string;
-  conversionsUsed: number;
-};
-
-type GuestUsageRow = {
-  conversions_used: number;
-};
-
 const rateLimitStore = new Map<string, RateLimitRecord>();
-const guestUsageStore = new Map<string, DailyUsageRecord>();
 const MAX_IMAGE_BATCH_BYTES = 250 * 1024 * 1024;
 const DEFAULT_OUTPUT_OPTIONS: OutputOptions = {
   quality: 90,
@@ -115,35 +111,6 @@ class RequestValidationError extends Error {
 
 function isOutputFormat(value: string): value is OutputFormat {
   return SUPPORTED_OUTPUT_FORMATS.includes(value as OutputFormat);
-}
-
-function getTodayDateString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function getClientIp(request: Request): string {
-  const forwardedFor = request.headers.get("x-forwarded-for");
-
-  if (forwardedFor) {
-    return forwardedFor.split(",")[0]?.trim() || "unknown";
-  }
-
-  return (
-    request.headers.get("x-real-ip") ??
-    request.headers.get("cf-connecting-ip") ??
-    "unknown"
-  );
-}
-
-function getGuestUsageKey(request: Request) {
-  const clientIp = getClientIp(request);
-  const hashSecret =
-    process.env.GUEST_USAGE_HASH_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const digest = hashSecret
-    ? createHmac("sha256", hashSecret).update(clientIp).digest("hex")
-    : createHash("sha256").update(clientIp).digest("hex");
-
-  return `guest:${digest}`;
 }
 
 function enforceRateLimit(key: string) {
@@ -303,38 +270,6 @@ function getSupabaseServerClient(accessToken?: string) {
   );
 }
 
-function getMemoryGuestUsage(key: string, date: string) {
-  const record = guestUsageStore.get(key);
-
-  if (!record || record.date !== date) {
-    guestUsageStore.set(key, { date, conversionsUsed: 0 });
-    return 0;
-  }
-
-  return record.conversionsUsed;
-}
-
-async function getPersistentGuestUsage(key: string, date: string) {
-  const supabase = getSupabaseAdminClient();
-
-  if (!supabase) {
-    return getMemoryGuestUsage(key, date);
-  }
-
-  const { data, error } = await supabase
-    .from("guest_conversion_usage")
-    .select("conversions_used")
-    .eq("guest_key", key)
-    .eq("date", date)
-    .maybeSingle();
-
-  if (error) {
-    throw new RequestValidationError("Could not verify guest usage.", 503);
-  }
-
-  return ((data as GuestUsageRow | null)?.conversions_used ?? 0);
-}
-
 async function getRequestIdentity(request: Request): Promise<RequestIdentity> {
   const authorization = request.headers.get("authorization");
   const token = authorization?.startsWith("Bearer ")
@@ -348,7 +283,7 @@ async function getRequestIdentity(request: Request): Promise<RequestIdentity> {
     } = await supabase.auth.getUser(token);
 
     if (user) {
-      const date = getTodayDateString();
+      const date = getUsageDate();
       const usageClient = getSupabaseAdminClient();
 
       if (!usageClient) {
@@ -378,10 +313,15 @@ async function getRequestIdentity(request: Request): Promise<RequestIdentity> {
     }
   }
 
-  const date = getTodayDateString();
+  const date = getUsageDate();
   const key = getGuestUsageKey(request);
-  const conversionsUsed = await getPersistentGuestUsage(key, date);
-  guestUsageStore.set(key, { date, conversionsUsed });
+  let conversionsUsed: number;
+
+  try {
+    conversionsUsed = await getGuestUsageCount(key, date);
+  } catch {
+    throw new RequestValidationError("Could not verify guest usage.", 503);
+  }
 
   return {
     type: "guest",
@@ -419,7 +359,7 @@ async function reserveUsage(identity: RequestIdentity, count: number) {
     return;
   }
 
-  const date = getTodayDateString();
+  const date = getUsageDate();
   const supabase = getSupabaseAdminClient();
 
   if (identity.type === "guest") {
@@ -433,7 +373,7 @@ async function reserveUsage(identity: RequestIdentity, count: number) {
         );
       }
 
-      guestUsageStore.set(identity.key, { date, conversionsUsed });
+      cacheGuestUsage(identity.key, date, conversionsUsed);
       identity.conversionsUsed = conversionsUsed;
       return;
     }
@@ -459,10 +399,7 @@ async function reserveUsage(identity: RequestIdentity, count: number) {
       );
     }
 
-    guestUsageStore.set(identity.key, {
-      date,
-      conversionsUsed: reservation.conversions_used,
-    });
+    cacheGuestUsage(identity.key, date, reservation.conversions_used);
     return;
   }
 
@@ -500,7 +437,7 @@ async function releaseUsage(identity: RequestIdentity, count: number) {
     return;
   }
 
-  const date = getTodayDateString();
+  const date = getUsageDate();
   const supabase = getSupabaseAdminClient();
 
   if (!supabase) {
@@ -509,7 +446,7 @@ async function releaseUsage(identity: RequestIdentity, count: number) {
         getMemoryGuestUsage(identity.key, date) - count,
         0,
       );
-      guestUsageStore.set(identity.key, { date, conversionsUsed });
+      cacheGuestUsage(identity.key, date, conversionsUsed);
       identity.conversionsUsed = conversionsUsed;
     }
 

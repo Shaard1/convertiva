@@ -28,6 +28,7 @@ import {
   createAuthenticatedUsage,
   getAuthenticatedUsage,
   getGuestUsage,
+  getSyncedGuestUsage,
   incrementGuestUsage,
 } from "@/lib/usage";
 import { createZipFromFiles } from "@/lib/zip";
@@ -362,21 +363,27 @@ export function ConverterCard() {
         setIsInitializing(false);
       }
 
-      if (!supabase) {
-        return;
-      }
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const session = supabase
+        ? (await supabase.auth.getSession()).data.session
+        : null;
       const authUser = mapSupabaseUser(session);
 
-      if (!isMounted || !authUser) {
+      if (!isMounted) {
         return;
       }
 
-      setUser(authUser);
-      syncAuthenticatedUsageInBackground(authUser);
+      if (authUser) {
+        setUser(authUser);
+        syncAuthenticatedUsageInBackground(authUser);
+        return;
+      }
+
+      const synchronizedGuestUsage = await getSyncedGuestUsage();
+
+      if (isMounted) {
+        setUsage(synchronizedGuestUsage);
+        syncFileStatuses(synchronizedGuestUsage.remaining);
+      }
     }
 
     initialize();
@@ -394,7 +401,12 @@ export function ConverterCard() {
           setUser(authUser);
 
           if (!authUser) {
-            const guestUsage = getGuestUsage();
+            const guestUsage = await getSyncedGuestUsage();
+
+            if (!isMounted) {
+              return;
+            }
+
             setUsage(guestUsage);
             syncFileStatuses(guestUsage.remaining);
             setUsageNotice(null);
@@ -655,7 +667,9 @@ export function ConverterCard() {
       return;
     }
 
-    const activeUsage = user ? await syncAuthenticatedUsage(user) : getGuestUsage();
+    const activeUsage = user
+      ? await syncAuthenticatedUsage(user)
+      : await getSyncedGuestUsage();
     const activePolicy = getActivePolicy(activeUsage.isGuest);
     const resolvedOutputOptions: OutputOptions = {
       quality: 90,
@@ -844,7 +858,7 @@ export function ConverterCard() {
   }
 
   async function handleLogout() {
-    const guestUsage = getGuestUsage();
+    const guestUsage = await getSyncedGuestUsage();
     setUser(null);
     setUsage(guestUsage);
     syncFileStatuses(guestUsage.remaining);

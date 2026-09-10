@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { signOutUser } from "@/lib/auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
-import { getAuthenticatedUsage, getGuestUsage } from "@/lib/usage";
+import {
+  getAuthenticatedUsage,
+  getGuestUsage,
+  getSyncedGuestUsage,
+} from "@/lib/usage";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
 
@@ -30,56 +34,75 @@ export function useAppShellState() {
     setUsage(guestUsage);
 
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      return;
-    }
-
     let isMounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    async function initializeUsage() {
+      const session = supabase
+        ? (await supabase.auth.getSession()).data.session
+        : null;
+
       if (!isMounted) {
         return;
       }
 
-      const authUser = mapSupabaseUser(data.session);
+      const authUser = mapSupabaseUser(session);
       setUser(authUser);
-      if (!authUser) {
-        return;
-      }
 
-      getAuthenticatedUsage(authUser)
-        .then(setUsage)
-        .catch(() => setUsage(guestUsage));
-    });
-
-    const listener = supabase.auth.onAuthStateChange(
-      async (_event: AuthChangeEvent, session) => {
-        const authUser = mapSupabaseUser(session);
-        setUser(authUser);
-
-        if (!authUser) {
-          setUsage(getGuestUsage());
-          return;
-        }
-
+      if (authUser) {
         try {
           setUsage(await getAuthenticatedUsage(authUser));
         } catch {
           setUsage(guestUsage);
+        }
+        return;
+      }
+
+      const synchronizedGuestUsage = await getSyncedGuestUsage();
+
+      if (isMounted) {
+        setUsage(synchronizedGuestUsage);
+      }
+    }
+
+    void initializeUsage();
+
+    const listener = supabase?.auth.onAuthStateChange(
+      async (_event: AuthChangeEvent, nextSession) => {
+        const authUser = mapSupabaseUser(nextSession);
+
+        if (!isMounted) {
+          return;
+        }
+
+        setUser(authUser);
+
+        if (authUser) {
+          try {
+            setUsage(await getAuthenticatedUsage(authUser));
+          } catch {
+            setUsage(guestUsage);
+          }
+          return;
+        }
+
+        const synchronizedGuestUsage = await getSyncedGuestUsage();
+
+        if (isMounted) {
+          setUsage(synchronizedGuestUsage);
         }
       },
     );
 
     return () => {
       isMounted = false;
-      listener.data.subscription.unsubscribe();
+      listener?.data.subscription.unsubscribe();
     };
   }, []);
 
   async function handleLogout() {
     await signOutUser();
     setUser(null);
-    setUsage(getGuestUsage());
+    setUsage(await getSyncedGuestUsage());
   }
 
   function openAuth(mode: "login" | "signup") {

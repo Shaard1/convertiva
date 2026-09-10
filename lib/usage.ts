@@ -4,6 +4,7 @@ import {
   GUEST_USAGE_STORAGE_KEY,
 } from "@/lib/constants";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { reconcileUsageCount } from "@/lib/usage-reconciliation";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
 
@@ -12,12 +13,23 @@ type StoredGuestUsage = {
   conversionsUsed: number;
 };
 
+function isStoredGuestUsage(value: unknown): value is StoredGuestUsage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const usage = value as Partial<StoredGuestUsage>;
+
+  return (
+    typeof usage.date === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(usage.date) &&
+    Number.isSafeInteger(usage.conversionsUsed) &&
+    (usage.conversionsUsed ?? -1) >= 0
+  );
+}
+
 function getTodayDateString() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = `${today.getMonth() + 1}`.padStart(2, "0");
-  const day = `${today.getDate()}`.padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return new Date().toISOString().slice(0, 10);
 }
 
 function buildUsage(
@@ -70,9 +82,9 @@ export function getGuestUsage(): UserUsage {
   }
 
   try {
-    const parsed = JSON.parse(raw) as StoredGuestUsage;
+    const parsed = JSON.parse(raw) as unknown;
 
-    if (parsed.date !== date) {
+    if (!isStoredGuestUsage(parsed) || parsed.date !== date) {
       const resetUsage: StoredGuestUsage = { date, conversionsUsed: 0 };
       window.localStorage.setItem(GUEST_USAGE_STORAGE_KEY, JSON.stringify(resetUsage));
       return buildUsage(0, GUEST_DAILY_LIMIT, true, date);
@@ -103,6 +115,67 @@ export function incrementGuestUsage(successfulConversions: number): UserUsage {
     true,
     updatedUsage.date,
   );
+}
+
+function isGuestUsage(value: unknown): value is UserUsage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const usage = value as Partial<UserUsage>;
+
+  return (
+    usage.isGuest === true &&
+    usage.label === "Guest" &&
+    typeof usage.date === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(usage.date) &&
+    Number.isSafeInteger(usage.conversionsUsed) &&
+    (usage.conversionsUsed ?? -1) >= 0 &&
+    usage.limit === GUEST_DAILY_LIMIT
+  );
+}
+
+export async function getSyncedGuestUsage(): Promise<UserUsage> {
+  const localUsage = getGuestUsage();
+
+  try {
+    const response = await fetch("/api/v1/usage", { cache: "no-store" });
+
+    if (!response.ok) {
+      console.warn(`Guest usage sync failed with status ${response.status}.`);
+      return localUsage;
+    }
+
+    const payload = (await response.json()) as { data?: unknown };
+
+    if (!isGuestUsage(payload.data) || payload.data.date !== localUsage.date) {
+      console.warn("Guest usage sync returned an invalid response.");
+      return localUsage;
+    }
+
+    const conversionsUsed = reconcileUsageCount({
+      localConversionsUsed: localUsage.conversionsUsed,
+      serverConversionsUsed: payload.data.conversionsUsed,
+      limit: GUEST_DAILY_LIMIT,
+    });
+    const synchronizedUsage: StoredGuestUsage = {
+      date: localUsage.date,
+      conversionsUsed,
+    };
+
+    window.localStorage.setItem(
+      GUEST_USAGE_STORAGE_KEY,
+      JSON.stringify(synchronizedUsage),
+    );
+
+    return buildUsage(conversionsUsed, GUEST_DAILY_LIMIT, true, localUsage.date);
+  } catch (error) {
+    console.warn(
+      "Guest usage sync is temporarily unavailable.",
+      error instanceof Error ? error.message : "Unknown error",
+    );
+    return localUsage;
+  }
 }
 
 export async function getAuthenticatedUsage(user: AuthUser): Promise<UserUsage> {

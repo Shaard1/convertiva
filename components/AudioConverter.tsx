@@ -23,7 +23,11 @@ import { signOutUser } from "@/lib/auth";
 import { formatFileSize } from "@/lib/format";
 import { audioFormatCategories, AudioFormat, supportedAudioAccept } from "@/lib/formats/audioFormats";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
-import { getAuthenticatedUsage, getGuestUsage } from "@/lib/usage";
+import {
+  getAuthenticatedUsage,
+  getGuestUsage,
+  getSyncedGuestUsage,
+} from "@/lib/usage";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
 
@@ -148,13 +152,20 @@ export function AudioConverter() {
     setUsage(guestUsage);
 
     const supabase = getSupabaseBrowserClient();
-    if (!supabase) {
-      return;
-    }
-
     let isMounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    if (!supabase) {
+      void getSyncedGuestUsage().then((synchronizedUsage) => {
+        if (isMounted) {
+          setUsage(synchronizedUsage);
+        }
+      });
+      return () => {
+        isMounted = false;
+      };
+    }
+
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!isMounted) {
         return;
       }
@@ -164,6 +175,13 @@ export function AudioConverter() {
         getAuthenticatedUsage(authUser)
           .then(setUsage)
           .catch(() => setUsage(guestUsage));
+        return;
+      }
+
+      const synchronizedUsage = await getSyncedGuestUsage();
+
+      if (isMounted) {
+        setUsage(synchronizedUsage);
       }
     });
 
@@ -172,7 +190,11 @@ export function AudioConverter() {
         const authUser = mapSupabaseUser(session);
         setUser(authUser);
         if (!authUser) {
-          setUsage(getGuestUsage());
+          const synchronizedUsage = await getSyncedGuestUsage();
+
+          if (isMounted) {
+            setUsage(synchronizedUsage);
+          }
           return;
         }
         try {
@@ -216,7 +238,7 @@ export function AudioConverter() {
   async function handleLogout() {
     await signOutUser();
     setUser(null);
-    setUsage(getGuestUsage());
+    setUsage(await getSyncedGuestUsage());
   }
 
   function openAuth(mode: "login" | "signup") {

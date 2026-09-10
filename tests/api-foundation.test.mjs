@@ -21,6 +21,9 @@ const http = await importTypeScriptModule("lib/api/http.ts");
 const { MemoryApiLimits } = await importTypeScriptModule(
   "lib/api/memory-limits.ts",
 );
+const { reconcileUsageCount } = await importTypeScriptModule(
+  "lib/usage-reconciliation.ts",
+);
 
 test("should preserve compatibility fields and add request metadata", async () => {
   const request = new Request("https://convertiva.test/api/v1/health", {
@@ -131,5 +134,32 @@ test("should reserve and release daily conversion usage atomically in memory", (
   assert.equal(
     limits.reserveDailyUsage({ ...reservation, count: 2 }).allowed,
     true,
+  );
+});
+
+test("should preserve spent guest conversions across state reconciliation", () => {
+  assert.equal(
+    reconcileUsageCount({
+      localConversionsUsed: 1,
+      serverConversionsUsed: 0,
+      limit: 15,
+    }),
+    1,
+  );
+  assert.equal(
+    reconcileUsageCount({
+      localConversionsUsed: 0,
+      serverConversionsUsed: 1,
+      limit: 15,
+    }),
+    1,
+  );
+  assert.equal(
+    reconcileUsageCount({
+      localConversionsUsed: 14,
+      serverConversionsUsed: 20,
+      limit: 15,
+    }),
+    15,
   );
 });

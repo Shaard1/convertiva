@@ -34,6 +34,7 @@ const workerCleanupRouteSource = await readFile(
 const cronAuthSource = await readFile("lib/cron-auth.ts", "utf8");
 const vercelConfig = JSON.parse(await readFile("vercel.json", "utf8"));
 const operationsRouteSource = await readFile("app/api/v1/operations/route.ts", "utf8");
+const usageRouteSource = await readFile("app/api/v1/usage/route.ts", "utf8");
 const apiHttpSource = await readFile("lib/api/http.ts", "utf8");
 const apiLimitsSource = await readFile("lib/api/limits.ts", "utf8");
 const idempotencySource = await readFile("lib/api/idempotency.ts", "utf8");
@@ -45,6 +46,11 @@ const operationRegistrySource = await readFile(
   "utf8",
 );
 const workerAuthSource = await readFile("lib/worker-auth.ts", "utf8");
+const browserUsageSource = await readFile("lib/usage.ts", "utf8");
+const guestUsageServerSource = await readFile(
+  "lib/guest-usage-server.ts",
+  "utf8",
+);
 const supabaseSetupSource = await readFile("supabase/setup.sql", "utf8");
 const legacyToolRouteSources = await Promise.all(
   [
@@ -276,4 +282,14 @@ test("guest usage tables are not writable through anonymous policies", () => {
     supabaseSetupSource,
     /create policy "Users can (?:insert|update) their own usage"/,
   );
+});
+
+test("guest usage is restored from durable server state after restart", () => {
+  assert.match(usageRouteSource, /getGuestUsageCount/);
+  assert.match(usageRouteSource, /force-dynamic/);
+  assert.match(guestUsageServerSource, /guest_conversion_usage/);
+  assert.match(guestUsageServerSource, /getSupabaseAdminClient/);
+  assert.match(browserUsageSource, /getSyncedGuestUsage/);
+  assert.match(browserUsageSource, /reconcileUsageCount/);
+  assert.match(browserUsageSource, /cache: "no-store"/);
 });
