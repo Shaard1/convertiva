@@ -11,7 +11,9 @@ const [middleware, apiHttp, archiveRoute, schema, network] = await Promise.all([
 ]);
 
 test("uses per-response nonce CSP without unsafe-inline scripts", () => {
-  assert.match(middleware, /script-src 'nonce-\$\{nonce\}' 'strict-dynamic'/);
+  assert.match(middleware, /const scriptSources = \[`'nonce-\$\{nonce\}'`, "'strict-dynamic'"\]/);
+  assert.match(middleware, /process\.env\.NODE_ENV !== "production"/);
+  assert.match(middleware, /scriptSources\.push\("'unsafe-eval'"\)/);
   assert.doesNotMatch(middleware, /script-src[^\n]*unsafe-inline/);
   assert.match(middleware, /frame-ancestors 'none'/);
 });

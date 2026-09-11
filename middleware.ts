@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
 function createContentSecurityPolicy(nonce: string) {
+  const scriptSources = [`'nonce-${nonce}'`, "'strict-dynamic'"];
+
+  // Next.js uses eval-based source maps and module tooling in development.
+  // Keep production strict while allowing the local client bundle to hydrate.
+  if (process.env.NODE_ENV !== "production") {
+    scriptSources.push("'unsafe-eval'");
+  }
+
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
-    `script-src 'nonce-${nonce}' 'strict-dynamic'`,
+    `script-src ${scriptSources.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
