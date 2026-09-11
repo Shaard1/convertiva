@@ -10,8 +10,8 @@ import {
   TriangleAlert,
   Upload,
 } from "lucide-react";
-import { AuthModal } from "@/components/AuthModal";
-import { ConverterToolIcon } from "@/components/ConvertersMegaMenu";
+import { ConverterToolIcon } from "@/components/ConverterToolIcon";
+import { LazyAuthModal as AuthModal } from "@/components/LazyAuthModal";
 import { Footer } from "@/components/Footer";
 import { Navbar } from "@/components/Navbar";
 import { SectionHeading } from "@/components/SectionHeading";
@@ -488,7 +488,9 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
       </main>
 
       <Footer />
-      <AuthModal isOpen={authModalOpen} mode={authMode} onClose={closeAuth} />
+      {authModalOpen ? (
+        <AuthModal isOpen mode={authMode} onClose={closeAuth} />
+      ) : null}
     </div>
   );
 }

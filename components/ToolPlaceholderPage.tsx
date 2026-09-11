@@ -1,14 +1,8 @@
-"use client";
-
-import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clock, Upload } from "lucide-react";
-import { AuthModal } from "@/components/AuthModal";
-import { ConverterToolIcon } from "@/components/ConvertersMegaMenu";
-import { Footer } from "@/components/Footer";
-import { Navbar } from "@/components/Navbar";
+import { ConverterToolIcon } from "@/components/ConverterToolIcon";
 import { SectionHeading } from "@/components/SectionHeading";
-import { useAppShellState } from "@/hooks/useAppShellState";
+import { SitePageShell } from "@/components/SitePageShell";
 import { getToolById } from "@/lib/tools/converterTools";
 
 type ToolPlaceholderPageProps = {
@@ -34,26 +28,15 @@ const plannedSteps = [
 ];
 
 export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
-  const tool = useMemo(() => getToolById(toolId), [toolId]);
-  const {
-    authModalOpen,
-    authMode,
-    closeAuth,
-    handleLogout,
-    openAuth,
-    usage,
-    user,
-  } = useAppShellState();
+  const tool = getToolById(toolId);
 
   if (!tool) {
     return null;
   }
 
   return (
-    <div className="page-shell converter-page min-h-screen text-[var(--foreground)]" data-tool-kind={tool.section}>
-      <Navbar user={user} usage={usage} onOpenAuth={openAuth} onLogout={handleLogout} />
-
-      <main>
+    <SitePageShell>
+      <div className="converter-page" data-tool-kind={tool.section}>
         <section className="converter-stage relative px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
           <div className="converter-frame mx-auto max-w-7xl">
             <div className="converter-shell card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
@@ -147,11 +130,8 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
             </div>
           </div>
         </section>
-      </main>
-
-      <Footer />
-      <AuthModal isOpen={authModalOpen} mode={authMode} onClose={closeAuth} />
-    </div>
+      </div>
+    </SitePageShell>
   );
 }
 

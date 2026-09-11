@@ -1,18 +1,43 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ChevronDown, LogOut, Menu, X } from "lucide-react";
-import {
-  ConvertersMegaMenu,
-  MobileConvertersMenu,
-} from "@/components/ConvertersMegaMenu";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UsageBadge } from "@/components/UsageBadge";
+
+const loadConvertersMenu = () => import("@/components/ConvertersMegaMenu");
+const ConvertersMegaMenu = dynamic(
+  () => loadConvertersMenu().then((module) => module.ConvertersMegaMenu),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        id="converters-menu"
+        className="rounded-[1.5rem] border bg-[var(--card)] p-5 text-sm font-medium text-[var(--muted-foreground)] shadow-[0_14px_34px_rgba(24,37,28,0.10)]"
+        role="status"
+      >
+        Loading converters…
+      </div>
+    ),
+  },
+);
+const MobileConvertersMenu = dynamic(
+  () => loadConvertersMenu().then((module) => module.MobileConvertersMenu),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="rounded-2xl border bg-[var(--card)] px-4 py-3 text-sm font-medium text-[var(--muted-foreground)]" role="status">
+        Loading converters…
+      </div>
+    ),
+  },
+);
 
 type NavbarProps = {
   user: AuthUser | null;
@@ -39,6 +64,8 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isConvertersOpen, setIsConvertersOpen] = useState(false);
+  const [hasOpenedMobileMenu, setHasOpenedMobileMenu] = useState(false);
+  const [hasOpenedConvertersMenu, setHasOpenedConvertersMenu] = useState(false);
   const [hasScrolled, setHasScrolled] = useState(false);
   const convertersRef = useRef<HTMLDivElement | null>(null);
   const showAuthenticatedActions = Boolean(user) && !usage?.isGuest;
@@ -103,6 +130,30 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
     setIsConvertersOpen(false);
   }
 
+  function toggleConvertersMenu() {
+    setIsConvertersOpen((current) => {
+      const nextOpen = !current;
+      if (nextOpen) {
+        setHasOpenedConvertersMenu(true);
+      }
+      return nextOpen;
+    });
+  }
+
+  function toggleMobileMenu() {
+    setIsMenuOpen((current) => {
+      const nextOpen = !current;
+      if (nextOpen) {
+        setHasOpenedMobileMenu(true);
+      }
+      return nextOpen;
+    });
+  }
+
+  function preloadConvertersMenu() {
+    void loadConvertersMenu();
+  }
+
   return (
     <header
       className={`sticky top-0 z-40 transition-all duration-300 ${
@@ -146,7 +197,9 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
             <div ref={convertersRef}>
               <button
                 type="button"
-                onClick={() => setIsConvertersOpen((current) => !current)}
+                onClick={toggleConvertersMenu}
+                onFocus={preloadConvertersMenu}
+                onPointerEnter={preloadConvertersMenu}
                 aria-expanded={isConvertersOpen}
                 aria-controls="converters-menu"
                 aria-label="Open converters menu"
@@ -159,18 +212,20 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
                   }`}
                 />
               </button>
-              <div
-                className={`fixed inset-x-4 top-[80px] z-50 mx-auto max-w-[1080px] transition-all duration-180 ease-out ${
-                  isConvertersOpen
-                    ? "visible translate-y-0 opacity-100"
-                    : "pointer-events-none invisible -translate-y-1 opacity-0"
-                }`}
-              >
-                <ConvertersMegaMenu activeRoute={pathname} onSelect={closeMenu} />
-              </div>
+              {hasOpenedConvertersMenu ? (
+                <div
+                  className={`fixed inset-x-4 top-[80px] z-50 mx-auto max-w-[1080px] transition-all duration-180 ease-out ${
+                    isConvertersOpen
+                      ? "visible translate-y-0 opacity-100"
+                      : "pointer-events-none invisible -translate-y-1 opacity-0"
+                  }`}
+                >
+                  <ConvertersMegaMenu activeRoute={pathname} onSelect={closeMenu} />
+                </div>
+              ) : null}
             </div>
             {navLinks.map((link) => (
-              <Link key={link.href} href={link.href} className={linkClass}>
+              <Link key={link.href} href={link.href} prefetch={false} className={linkClass}>
                 {link.label}
               </Link>
             ))}
@@ -212,7 +267,10 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
 
             <button
               type="button"
-              onClick={() => setIsMenuOpen((current) => !current)}
+              onClick={toggleMobileMenu}
+              onFocus={preloadConvertersMenu}
+              onPointerDown={preloadConvertersMenu}
+              onPointerEnter={preloadConvertersMenu}
               aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-expanded={isMenuOpen}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full border bg-[var(--card)] text-[var(--foreground)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] lg:hidden"
@@ -237,11 +295,14 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
               <UsageBadge usage={usage} />
             </div>
             <nav aria-label="Mobile navigation" className="grid gap-1">
-              <MobileConvertersMenu activeRoute={pathname} onSelect={closeMenu} />
+              {hasOpenedMobileMenu ? (
+                <MobileConvertersMenu activeRoute={pathname} onSelect={closeMenu} />
+              ) : null}
               {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
+                  prefetch={false}
                   onClick={closeMenu}
                   className="rounded-2xl px-4 py-3 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]"
                 >

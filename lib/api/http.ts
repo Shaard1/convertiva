@@ -14,6 +14,10 @@ export type ApiResponseOptions = {
 
 type ApiHandler = (context: ApiRequestContext) => Promise<Response>;
 
+type ApiHandlerOptions = {
+  enforceRateLimit?: boolean;
+};
+
 const API_VERSION = "v1";
 const REQUEST_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 const MAX_TRACKED_CLIENTS = 10_000;
@@ -359,12 +363,15 @@ export async function handleApiRequest(
   operation: string,
   fallbackMessage: string,
   handler: ApiHandler,
+  options: ApiHandlerOptions = {},
 ) {
   const context = createApiRequestContext(request, operation);
 
   try {
     assertTrustedBrowserOrigin(request);
-    await enforceRequestRateLimit(request, `api:${operation}`, 60);
+    if (options.enforceRateLimit !== false) {
+      await enforceRequestRateLimit(request, `api:${operation}`, 60);
+    }
     return await handler(context);
   } catch (error) {
     const publicError = normalizeApiError(error, fallbackMessage);

@@ -1,7 +1,6 @@
 "use client";
 
 import { ChangeEvent, DragEvent, RefObject, useEffect, useMemo, useRef, useState } from "react";
-import { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import {
   CheckCircle2,
   ChevronDown,
@@ -15,23 +14,15 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { AuthModal } from "@/components/AuthModal";
 import { Navbar } from "@/components/Navbar";
-import { signOutUser } from "@/lib/auth";
+import { LazyAuthModal as AuthModal } from "@/components/LazyAuthModal";
 import { formatFileSize } from "@/lib/format";
-import {
-  getAuthenticatedUsage,
-  getGuestUsage,
-  getSyncedGuestUsage,
-} from "@/lib/usage";
+import { useAppShellState } from "@/hooks/useAppShellState";
 import {
   documentFormatCategories,
   DocumentFormat,
   supportedDocumentAccept,
 } from "@/lib/formats/documentFormats";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
-import { AuthUser } from "@/types/auth";
-import { UserUsage } from "@/types/usage";
 
 type DocumentFile = {
   file: File;
@@ -59,17 +50,6 @@ const defaultDocumentOptions: DocumentOptions = {
   ocrScannedPages: "off",
 };
 
-function mapSupabaseUser(session: Session | null): AuthUser | null {
-  if (!session?.user) {
-    return null;
-  }
-
-  return {
-    id: session.user.id,
-    email: session.user.email ?? null,
-  };
-}
-
 function getDocumentTypeLabel(file: File) {
   const match = file.name.match(/\.([^.]+)$/);
   return match ? match[1].toUpperCase() : "Document";
@@ -85,10 +65,15 @@ export function DocumentConverter() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const optionsTriggerRef = useRef<HTMLButtonElement | null>(null);
   const firstOptionsFieldRef = useRef<HTMLSelectElement | null>(null);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [usage, setUsage] = useState<UserUsage | null>(null);
+  const {
+    authModalOpen,
+    authMode,
+    closeAuth,
+    handleLogout,
+    openAuth,
+    usage,
+    user,
+  } = useAppShellState();
   const [selectedDocument, setSelectedDocument] = useState<DocumentFile | null>(null);
   const [outputFormat, setOutputFormat] = useState<DocumentFormat>("PDF");
   const [status, setStatus] = useState<DocumentStatus>("idle");
@@ -97,70 +82,6 @@ export function DocumentConverter() {
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [options, setOptions] = useState<DocumentOptions>(defaultDocumentOptions);
   const [draftOptions, setDraftOptions] = useState<DocumentOptions>(defaultDocumentOptions);
-
-  useEffect(() => {
-    const guestUsage = getGuestUsage();
-    setUsage(guestUsage);
-
-    const supabase = getSupabaseBrowserClient();
-    let isMounted = true;
-
-    if (!supabase) {
-      void getSyncedGuestUsage().then((synchronizedUsage) => {
-        if (isMounted) {
-          setUsage(synchronizedUsage);
-        }
-      });
-      return () => {
-        isMounted = false;
-      };
-    }
-
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!isMounted) {
-        return;
-      }
-      const authUser = mapSupabaseUser(data.session);
-      setUser(authUser);
-      if (authUser) {
-        getAuthenticatedUsage(authUser)
-          .then(setUsage)
-          .catch(() => setUsage(guestUsage));
-        return;
-      }
-
-      const synchronizedUsage = await getSyncedGuestUsage();
-
-      if (isMounted) {
-        setUsage(synchronizedUsage);
-      }
-    });
-
-    const listener = supabase.auth.onAuthStateChange(
-      async (_event: AuthChangeEvent, session) => {
-        const authUser = mapSupabaseUser(session);
-        setUser(authUser);
-        if (!authUser) {
-          const synchronizedUsage = await getSyncedGuestUsage();
-
-          if (isMounted) {
-            setUsage(synchronizedUsage);
-          }
-          return;
-        }
-        try {
-          setUsage(await getAuthenticatedUsage(authUser));
-        } catch {
-          setUsage(guestUsage);
-        }
-      },
-    );
-
-    return () => {
-      isMounted = false;
-      listener.data.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (!isOptionsOpen) {
@@ -177,17 +98,6 @@ export function DocumentConverter() {
     firstOptionsFieldRef.current?.focus();
     return () => window.removeEventListener("keydown", handleEscape);
   }, [isOptionsOpen]);
-
-  async function handleLogout() {
-    await signOutUser();
-    setUser(null);
-    setUsage(await getSyncedGuestUsage());
-  }
-
-  function openAuth(mode: "login" | "signup") {
-    setAuthMode(mode);
-    setAuthModalOpen(true);
-  }
 
   function selectFile(file: File | undefined) {
     if (!file) {
@@ -469,11 +379,13 @@ export function DocumentConverter() {
         </section>
       </main>
 
-      <AuthModal
-        isOpen={authModalOpen}
-        mode={authMode}
-        onClose={() => setAuthModalOpen(false)}
-      />
+      {authModalOpen ? (
+        <AuthModal
+          isOpen
+          mode={authMode}
+          onClose={closeAuth}
+        />
+      ) : null}
 
       {isOptionsOpen ? (
         <DocumentOptionsModal

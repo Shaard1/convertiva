@@ -1,10 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AuthChangeEvent, Session } from "@supabase/supabase-js";
-import JSZip from "jszip";
+import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { LoaderCircle, ShieldCheck, Sparkles, X } from "lucide-react";
-import { AuthModal } from "@/components/AuthModal";
+import { LazyAuthModal as AuthModal } from "@/components/LazyAuthModal";
 import { BatchResultList } from "@/components/BatchResultList";
 import { ConversionHistoryList } from "@/components/ConversionHistoryList";
 import { ConversionProgressList } from "@/components/ConversionProgressList";
@@ -12,18 +11,16 @@ import { FileList } from "@/components/FileList";
 import { FormatSelector } from "@/components/FormatSelector";
 import { Navbar } from "@/components/Navbar";
 import { UploadBox } from "@/components/UploadBox";
-import { signOutUser } from "@/lib/auth";
+import {
+  AUTH_SESSION_CHANGED_EVENT,
+  hasStoredSupabaseSession,
+} from "@/lib/auth-session-client";
 import {
   CONVERSION_POLICIES,
   LOGGED_IN_HISTORY_LIMIT,
 } from "@/lib/constants";
-import {
-  loadAuthenticatedConversionHistory,
-  saveAuthenticatedConversionHistory,
-} from "@/lib/conversion-history";
 import { validateFile } from "@/lib/file";
 import { formatFileSize, getFileFormatLabel } from "@/lib/format";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
 import {
   createAuthenticatedUsage,
   getAuthenticatedUsage,
@@ -31,7 +28,6 @@ import {
   getSyncedGuestUsage,
   incrementGuestUsage,
 } from "@/lib/usage";
-import { createZipFromFiles } from "@/lib/zip";
 import { AuthUser } from "@/types/auth";
 import {
   ConvertedFile,
@@ -51,7 +47,6 @@ const initialState: ConverterState = {
 };
 
 const CLIENT_CONVERSION_BATCH_SIZE = 5;
-
 function createUploadedFile(file: File): UploadedFile {
   return {
     id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
@@ -328,6 +323,9 @@ export function ConverterCard() {
 
   async function syncAuthenticatedUsage(authUser: AuthUser) {
     try {
+      const { loadAuthenticatedConversionHistory } = await import(
+        "@/lib/conversion-history"
+      );
       const nextUsage = await getAuthenticatedUsage(authUser);
       const nextHistory = await loadAuthenticatedConversionHistory(authUser);
       setUsage(nextUsage);
@@ -353,25 +351,27 @@ export function ConverterCard() {
 
   useEffect(() => {
     let isMounted = true;
-    const supabase = getSupabaseBrowserClient();
+    let authInitialized = false;
+    let synchronizedUserId: string | null | undefined;
+    let subscription:
+      | {
+          unsubscribe: () => void;
+        }
+      | undefined;
 
-    async function initialize() {
-      const guestUsage = getGuestUsage();
+    const guestUsage = getGuestUsage();
+    setUsage(guestUsage);
+    setIsInitializing(false);
 
-      if (isMounted) {
-        setUsage(guestUsage);
-        setIsInitializing(false);
-      }
-
-      const session = supabase
-        ? (await supabase.auth.getSession()).data.session
-        : null;
+    async function synchronizeSession(session: Session | null) {
       const authUser = mapSupabaseUser(session);
+      const userId = authUser?.id ?? null;
 
-      if (!isMounted) {
+      if (!isMounted || synchronizedUserId === userId) {
         return;
       }
 
+      synchronizedUserId = userId;
       if (authUser) {
         setUser(authUser);
         syncAuthenticatedUsageInBackground(authUser);
@@ -386,42 +386,58 @@ export function ConverterCard() {
       }
     }
 
-    initialize();
+    async function initializeAuth() {
+      if (authInitialized) return;
+      authInitialized = true;
 
-    let subscription:
-      | {
-          unsubscribe: () => void;
-        }
-      | undefined;
+      const { getSupabaseBrowserClient } = await import("@/lib/supabase");
+      if (!isMounted) return;
 
-    if (supabase) {
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        await synchronizeSession(null);
+        return;
+      }
+
       const authListener = supabase.auth.onAuthStateChange(
-        async (_event: AuthChangeEvent, session: Session | null) => {
-          const authUser = mapSupabaseUser(session);
-          setUser(authUser);
-
-          if (!authUser) {
-            const guestUsage = await getSyncedGuestUsage();
-
-            if (!isMounted) {
-              return;
-            }
-
-            setUsage(guestUsage);
-            syncFileStatuses(guestUsage.remaining);
-            setUsageNotice(null);
-            return;
-          }
-
-          syncAuthenticatedUsageInBackground(authUser);
+        (_event: AuthChangeEvent, session: Session | null) => {
+          void synchronizeSession(session);
         },
       );
-
       subscription = authListener.data.subscription;
+
+      const session = (await supabase.auth.getSession()).data.session;
+      await synchronizeSession(session);
     }
+
+    async function initializeSession() {
+      if (hasStoredSupabaseSession()) {
+        await initializeAuth();
+        return;
+      }
+
+      await synchronizeSession(null);
+    }
+
+    function handleAuthSessionChange() {
+      synchronizedUserId = undefined;
+      void initializeAuth();
+    }
+
+    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, handleAuthSessionChange);
+    const supportsIdleCallback = typeof window.requestIdleCallback === "function";
+    const initializationId = supportsIdleCallback
+      ? window.requestIdleCallback(() => void initializeSession(), { timeout: 1_200 })
+      : window.setTimeout(() => void initializeSession(), 0);
 
     return () => {
       isMounted = false;
+      if (supportsIdleCallback) {
+        window.cancelIdleCallback(initializationId);
+      } else {
+        window.clearTimeout(initializationId);
+      }
+      window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, handleAuthSessionChange);
       subscription?.unsubscribe();
     };
   }, []);
@@ -639,6 +655,7 @@ export function ConverterCard() {
       ];
     }
 
+    const { default: JSZip } = await import("jszip");
     const zip = await JSZip.loadAsync(responseBlob);
     const zipEntries = Object.values(zip.files).filter((entry) => !entry.dir);
 
@@ -737,6 +754,7 @@ export function ConverterCard() {
     });
 
     try {
+      const { getSupabaseBrowserClient } = await import("@/lib/supabase");
       const supabase = getSupabaseBrowserClient();
       const sessionResult = user && supabase
         ? await supabase.auth.getSession()
@@ -778,6 +796,9 @@ export function ConverterCard() {
       }
 
       if (user && results.length) {
+        const { saveAuthenticatedConversionHistory } = await import(
+          "@/lib/conversion-history"
+        );
         const historyResult = await saveAuthenticatedConversionHistory(
           user,
           results,
@@ -848,6 +869,7 @@ export function ConverterCard() {
   }
 
   async function handleDownloadAll() {
+    const { createZipFromFiles } = await import("@/lib/zip");
     const zipBlob = await createZipFromFiles(convertedFiles);
     const url = URL.createObjectURL(zipBlob);
     const link = document.createElement("a");
@@ -858,6 +880,7 @@ export function ConverterCard() {
   }
 
   async function handleLogout() {
+    const { signOutUser } = await import("@/lib/auth");
     const guestUsage = await getSyncedGuestUsage();
     setUser(null);
     setUsage(guestUsage);
@@ -1071,11 +1094,13 @@ export function ConverterCard() {
         </section>
       </main>
 
-      <AuthModal
-        isOpen={authModalOpen}
-        mode={authMode}
-        onClose={() => setAuthModalOpen(false)}
-      />
+      {authModalOpen ? (
+        <AuthModal
+          isOpen
+          mode={authMode}
+          onClose={() => setAuthModalOpen(false)}
+        />
+      ) : null}
       {hasSelectedFiles && isOptionsOpen ? (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[color:color-mix(in_srgb,var(--foreground)_35%,transparent)] p-4 animate-[options-fade_180ms_ease-out] sm:items-center"

@@ -3,60 +3,12 @@
 import { KeyboardEvent, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import {
-  Archive,
-  ArchiveRestore,
-  BookOpen,
-  Box,
-  Braces,
-  Combine,
-  FileArchive,
-  FileImage,
-  FileScan,
-  FileText,
-  FileType,
-  ImageDown,
-  Layers3,
-  LucideIcon,
-  Maximize2,
-  Music,
-  PanelTop,
-  Presentation,
-  Sheet,
-  Video,
-} from "lucide-react";
+import { ConverterToolIcon } from "@/components/ConverterToolIcon";
 import {
   converterToolSections,
   getToolsBySection,
   ConverterTool,
 } from "@/lib/tools/converterTools";
-
-const iconMap: Record<string, LucideIcon> = {
-  archive: FileArchive,
-  "archive-extract": ArchiveRestore,
-  "archive-plus": Archive,
-  audio: Music,
-  cad: Box,
-  compress: Maximize2,
-  "compress-image": ImageDown,
-  document: FileText,
-  ebook: BookOpen,
-  font: FileType,
-  image: FileImage,
-  merge: Combine,
-  ocr: FileScan,
-  presentation: Presentation,
-  screenshot: PanelTop,
-  spreadsheet: Sheet,
-  vector: Braces,
-  video: Video,
-  "website-pdf": Layers3,
-};
-
-export function ConverterToolIcon({ icon, className }: { icon: string; className?: string }) {
-  const Icon = iconMap[icon] ?? FileText;
-  return <Icon className={className} />;
-}
 
 function isActiveTool(route: string, activeRoute: string) {
   return activeRoute === route || activeRoute.startsWith(`${route}/`);
@@ -255,6 +207,7 @@ function ConverterToolLink({
   return (
     <Link
       href={tool.route as Route}
+      prefetch={false}
       data-tool-link
       onClick={onSelect}
       onKeyDown={handleToolKeyDown}
@@ -348,6 +301,7 @@ export function MobileConvertersMenu({
                   <Link
                     key={tool.id}
                     href={tool.route as Route}
+                    prefetch={false}
                     onClick={onSelect}
                     className={mobileRowClassName}
                   >

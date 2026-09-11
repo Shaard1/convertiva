@@ -16,5 +16,6 @@ export async function GET(request: Request) {
         service: "convertiva-api",
         version: "v1",
       }),
+    { enforceRateLimit: false },
   );
 }

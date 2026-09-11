@@ -8,6 +8,7 @@ import {
   signInWithPassword,
   signUpWithPassword,
 } from "@/lib/auth";
+import { notifyAuthSessionChanged } from "@/lib/auth-session-client";
 
 type AuthModalProps = {
   isOpen: boolean;
@@ -158,11 +159,13 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
       }
 
       if (activeMode === "signup") {
+        notifyAuthSessionChanged();
         setSuccess(
           result.success ??
             "Convertiva sent a confirmation link to your email.",
         );
       } else {
+        notifyAuthSessionChanged();
         onClose();
       }
     } finally {

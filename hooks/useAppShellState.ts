@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AuthChangeEvent, Session } from "@supabase/supabase-js";
-import { signOutUser } from "@/lib/auth";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
+import type { AuthChangeEvent, Session, Subscription } from "@supabase/supabase-js";
+import {
+  AUTH_SESSION_CHANGED_EVENT,
+  hasStoredSupabaseSession,
+} from "@/lib/auth-session-client";
 import {
   getAuthenticatedUsage,
   getGuestUsage,
@@ -33,19 +35,19 @@ export function useAppShellState() {
     const guestUsage = getGuestUsage();
     setUsage(guestUsage);
 
-    const supabase = getSupabaseBrowserClient();
     let isMounted = true;
+    let subscription: Subscription | undefined;
+    let synchronizedUserId: string | null | undefined;
+    let authInitialized = false;
 
-    async function initializeUsage() {
-      const session = supabase
-        ? (await supabase.auth.getSession()).data.session
-        : null;
-
-      if (!isMounted) {
+    async function synchronizeSession(session: Session | null) {
+      const authUser = mapSupabaseUser(session);
+      const userId = authUser?.id ?? null;
+      if (!isMounted || synchronizedUserId === userId) {
         return;
       }
 
-      const authUser = mapSupabaseUser(session);
+      synchronizedUserId = userId;
       setUser(authUser);
 
       if (authUser) {
@@ -64,42 +66,66 @@ export function useAppShellState() {
       }
     }
 
-    void initializeUsage();
+    async function initializeAuth() {
+      if (authInitialized) return;
+      authInitialized = true;
 
-    const listener = supabase?.auth.onAuthStateChange(
-      async (_event: AuthChangeEvent, nextSession) => {
-        const authUser = mapSupabaseUser(nextSession);
+      const { getSupabaseBrowserClient } = await import("@/lib/supabase");
+      if (!isMounted) return;
 
-        if (!isMounted) {
-          return;
-        }
+      const supabase = getSupabaseBrowserClient();
+      if (!supabase) {
+        await synchronizeSession(null);
+        return;
+      }
 
-        setUser(authUser);
+      const listener = supabase.auth.onAuthStateChange(
+        (_event: AuthChangeEvent, nextSession) => {
+          void synchronizeSession(nextSession);
+        },
+      );
+      subscription = listener.data.subscription;
 
-        if (authUser) {
-          try {
-            setUsage(await getAuthenticatedUsage(authUser));
-          } catch {
-            setUsage(guestUsage);
-          }
-          return;
-        }
+      const session = (await supabase.auth.getSession()).data.session;
+      await synchronizeSession(session);
+    }
 
-        const synchronizedGuestUsage = await getSyncedGuestUsage();
+    async function initializeSession() {
+      if (hasStoredSupabaseSession()) {
+        await initializeAuth();
+        return;
+      }
 
-        if (isMounted) {
-          setUsage(synchronizedGuestUsage);
-        }
-      },
-    );
+      await synchronizeSession(null);
+    }
+
+    function handleAuthSessionChange() {
+      synchronizedUserId = undefined;
+      void initializeAuth();
+    }
+
+    window.addEventListener(AUTH_SESSION_CHANGED_EVENT, handleAuthSessionChange);
+
+    const initialize = () => void initializeSession();
+    const supportsIdleCallback = typeof window.requestIdleCallback === "function";
+    const initializationId = supportsIdleCallback
+      ? window.requestIdleCallback(initialize, { timeout: 1_200 })
+      : window.setTimeout(initialize, 0);
 
     return () => {
       isMounted = false;
-      listener?.data.subscription.unsubscribe();
+      if (supportsIdleCallback) {
+        window.cancelIdleCallback(initializationId);
+      } else {
+        window.clearTimeout(initializationId);
+      }
+      window.removeEventListener(AUTH_SESSION_CHANGED_EVENT, handleAuthSessionChange);
+      subscription?.unsubscribe();
     };
   }, []);
 
   async function handleLogout() {
+    const { signOutUser } = await import("@/lib/auth");
     await signOutUser();
     setUser(null);
     setUsage(await getSyncedGuestUsage());

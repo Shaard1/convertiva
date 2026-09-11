@@ -3,7 +3,6 @@ import {
   GUEST_DAILY_LIMIT,
   GUEST_USAGE_STORAGE_KEY,
 } from "@/lib/constants";
-import { getSupabaseBrowserClient } from "@/lib/supabase";
 import { reconcileUsageCount } from "@/lib/usage-reconciliation";
 import { AuthUser } from "@/types/auth";
 import { UserUsage } from "@/types/usage";
@@ -179,6 +178,7 @@ export async function getSyncedGuestUsage(): Promise<UserUsage> {
 }
 
 export async function getAuthenticatedUsage(user: AuthUser): Promise<UserUsage> {
+  const { getSupabaseBrowserClient } = await import("@/lib/supabase");
   const supabase = getSupabaseBrowserClient();
 
   if (!supabase) {
@@ -209,6 +209,7 @@ export async function incrementAuthenticatedUsage(
   user: AuthUser,
   successfulConversions: number,
 ): Promise<UserUsage> {
+  const { getSupabaseBrowserClient } = await import("@/lib/supabase");
   const supabase = getSupabaseBrowserClient();
 
   if (!supabase) {

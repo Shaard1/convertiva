@@ -8,6 +8,7 @@ import {
 } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
+const READINESS_DATABASE_TIMEOUT_MS = 1_500;
 
 export async function GET(request: Request) {
   return handleApiRequest(
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
           ? await supabase
               .from("conversion_platform_jobs")
               .select("id", { count: "exact", head: true })
+              .abortSignal(AbortSignal.timeout(READINESS_DATABASE_TIMEOUT_MS))
               .limit(1)
           : { error: new Error("Database client is unavailable.") };
 
@@ -48,5 +50,6 @@ export async function GET(request: Request) {
         { status: isReady ? 200 : 503 },
       );
     },
+    { enforceRateLimit: false },
   );
 }

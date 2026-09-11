@@ -42,7 +42,7 @@ export function Footer() {
             <p className="eyebrow"><ShieldCheck className="h-4 w-4" /> Private, temporary processing</p>
             <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Your next file is a few clicks from finished.</h2>
           </div>
-          <Link href="/tools/image-converter" className="button-primary w-fit">Open a converter <ArrowUpRight className="h-4 w-4" /></Link>
+          <Link href="/tools/image-converter" prefetch={false} className="button-primary w-fit">Open a converter <ArrowUpRight className="h-4 w-4" /></Link>
         </div>
         <div className="grid gap-10 md:grid-cols-2 xl:grid-cols-[1.7fr_1fr_1fr_1fr]">
           <div className="max-w-md">
@@ -79,10 +79,10 @@ export function Footer() {
         <div className="mt-8 flex flex-col gap-3 border-t border-[var(--border)]/70 pt-5 text-sm text-[var(--muted-foreground)] md:flex-row md:items-center md:justify-between">
           <p className="text-center md:text-left">© 2026 {APP_NAME}. All rights reserved.</p>
           <div className="flex items-center justify-center gap-4 md:justify-end">
-            <Link href="/privacy-policy" className={linkClass}>
+            <Link href="/privacy-policy" prefetch={false} className={linkClass}>
               Privacy
             </Link>
-            <Link href="/terms" className={linkClass}>
+            <Link href="/terms" prefetch={false} className={linkClass}>
               Terms
             </Link>
           </div>
@@ -106,7 +106,7 @@ function FooterColumn({
       </h2>
       <nav className="mt-4 grid gap-2.5" aria-label={title}>
         {links.map((link) => (
-          <Link key={link.href} href={link.href} className={linkClass}>
+          <Link key={link.href} href={link.href} prefetch={false} className={linkClass}>
             {link.label}
           </Link>
         ))}

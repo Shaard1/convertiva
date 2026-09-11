@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "node --test tests/*.test.mjs",
-    "check": "npm run lint && npm run typecheck && npm test"
+    "perf:budget": "node scripts/performance-budget.mjs",
+    "check": "npm run lint && npm run typecheck && npm test",
+    "verify": "npm run check && npm run build && npm run perf:budget"
   },
   "dependencies": {
     "@sparticuz/chromium": "149.0.0",

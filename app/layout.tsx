@@ -3,15 +3,13 @@ import { headers } from "next/headers";
 import Script from "next/script";
 import "./globals.css";
 import { RouteLoadingIndicator } from "@/components/RouteLoadingIndicator";
-import { ThemeProvider } from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
   title: "Convertiva",
   description:
     "A minimal converter platform for image, video, document, and audio files.",
   icons: {
-    icon: "/brand/favicon.png",
-    shortcut: "/brand/favicon.png",
+    icon: "/icon.svg",
     apple: "/brand/favicon.png",
   },
 };
@@ -27,10 +25,8 @@ export default async function RootLayout({
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <body>
         <Script src="/theme-init.js" strategy="beforeInteractive" nonce={nonce} />
-        <ThemeProvider>
-          <RouteLoadingIndicator />
-          {children}
-        </ThemeProvider>
+        <RouteLoadingIndicator />
+        {children}
       </body>
     </html>
   );
