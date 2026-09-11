@@ -12,6 +12,7 @@ import {
   SUPPORTED_OUTPUT_FORMATS,
 } from "@/lib/constants";
 import { convertUploadedFile, ConvertedImage } from "@/lib/conversion";
+import { isDevelopmentServiceFallbackActive } from "@/lib/development-service-fallback";
 import { formatFileSize, getFileExtensionLabel } from "@/lib/format";
 import {
   cacheGuestUsage,
@@ -42,6 +43,7 @@ type RequestIdentity =
       limit: number;
       policyName: ConversionPolicyName;
       conversionsUsed: number;
+      usageReservationBackend?: "memory" | "supabase";
     }
   | {
       type: "guest";
@@ -49,6 +51,7 @@ type RequestIdentity =
       limit: number;
       policyName: ConversionPolicyName;
       conversionsUsed: number;
+      usageReservationBackend?: "memory" | "supabase";
     };
 
 type RateLimitRecord = {
@@ -58,6 +61,7 @@ type RateLimitRecord = {
 
 const rateLimitStore = new Map<string, RateLimitRecord>();
 const MAX_IMAGE_BATCH_BYTES = 250 * 1024 * 1024;
+const USAGE_RESERVATION_TIMEOUT_MS = 1_500;
 const DEFAULT_OUTPUT_OPTIONS: OutputOptions = {
   quality: 90,
   keepMetadata: false,
@@ -369,30 +373,37 @@ async function reserveUsage(identity: RequestIdentity, count: number) {
   const supabase = getSupabaseAdminClient();
 
   if (identity.type === "guest") {
-    if (!supabase) {
-      const conversionsUsed = getMemoryGuestUsage(identity.key, date) + count;
-
-      if (conversionsUsed > identity.limit) {
-        throw new RequestValidationError(
-          "Guest limit reached. Sign in to convert more images.",
-          429,
-        );
-      }
-
-      cacheGuestUsage(identity.key, date, conversionsUsed);
-      identity.conversionsUsed = conversionsUsed;
+    if (!supabase || isDevelopmentServiceFallbackActive()) {
+      reserveGuestUsageInMemory(identity, count, date);
       return;
     }
 
-    const { data, error } = await supabase.rpc("reserve_guest_conversion_usage", {
-      p_amount: count,
-      p_day: date,
-      p_guest_key: identity.key,
-      p_limit: identity.limit,
-    });
+    let data: unknown;
+    let error: unknown;
+
+    try {
+      const result = await supabase
+        .rpc("reserve_guest_conversion_usage", {
+          p_amount: count,
+          p_day: date,
+          p_guest_key: identity.key,
+          p_limit: identity.limit,
+        })
+        .abortSignal(AbortSignal.timeout(USAGE_RESERVATION_TIMEOUT_MS));
+      data = result.data;
+      error = result.error;
+    } catch (rpcError) {
+      error = rpcError;
+    }
+
     const reservation = getUsageReservation(data);
 
     if (error || !reservation) {
+      if (process.env.NODE_ENV !== "production") {
+        reserveGuestUsageInMemory(identity, count, date);
+        return;
+      }
+
       throw new RequestValidationError("Could not reserve guest usage.", 503);
     }
 
@@ -406,6 +417,7 @@ async function reserveUsage(identity: RequestIdentity, count: number) {
     }
 
     cacheGuestUsage(identity.key, date, reservation.conversions_used);
+    identity.usageReservationBackend = "supabase";
     return;
   }
 
@@ -438,6 +450,25 @@ async function reserveUsage(identity: RequestIdentity, count: number) {
   }
 }
 
+function reserveGuestUsageInMemory(
+  identity: Extract<RequestIdentity, { type: "guest" }>,
+  count: number,
+  date: string,
+) {
+  const conversionsUsed = getMemoryGuestUsage(identity.key, date) + count;
+
+  if (conversionsUsed > identity.limit) {
+    throw new RequestValidationError(
+      "Guest limit reached. Sign in to convert more images.",
+      429,
+    );
+  }
+
+  cacheGuestUsage(identity.key, date, conversionsUsed);
+  identity.conversionsUsed = conversionsUsed;
+  identity.usageReservationBackend = "memory";
+}
+
 async function releaseUsage(identity: RequestIdentity, count: number) {
   if (count <= 0) {
     return;
@@ -446,18 +477,17 @@ async function releaseUsage(identity: RequestIdentity, count: number) {
   const date = getUsageDate();
   const supabase = getSupabaseAdminClient();
 
-  if (!supabase) {
-    if (identity.type === "guest") {
-      const conversionsUsed = Math.max(
-        getMemoryGuestUsage(identity.key, date) - count,
-        0,
-      );
-      cacheGuestUsage(identity.key, date, conversionsUsed);
-      identity.conversionsUsed = conversionsUsed;
-    }
-
+  if (identity.type === "guest" && identity.usageReservationBackend === "memory") {
+    const conversionsUsed = Math.max(
+      getMemoryGuestUsage(identity.key, date) - count,
+      0,
+    );
+    cacheGuestUsage(identity.key, date, conversionsUsed);
+    identity.conversionsUsed = conversionsUsed;
     return;
   }
+
+  if (!supabase) return;
 
   const functionName =
     identity.type === "guest"

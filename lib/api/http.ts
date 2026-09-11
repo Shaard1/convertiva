@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { activateDevelopmentServiceFallback } from "@/lib/development-service-fallback";
 import { getSupabaseAdminClient } from "@/lib/supabase-server";
 
 export type ApiRequestContext = {
@@ -19,6 +20,7 @@ type ApiHandlerOptions = {
 };
 
 const API_VERSION = "v1";
+const DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS = 1_500;
 const REQUEST_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$/;
 const MAX_TRACKED_CLIENTS = 10_000;
 
@@ -28,6 +30,7 @@ type RateLimitRecord = {
 };
 
 const requestRateLimits = new Map<string, RateLimitRecord>();
+let hasWarnedAboutLocalRateLimitFallback = false;
 
 function defaultErrorCode(statusCode: number) {
   switch (statusCode) {
@@ -116,25 +119,44 @@ export async function enforceRequestRateLimit(
   const supabase = getSupabaseAdminClient();
 
   if (supabase) {
-    const { data, error } = await supabase.rpc("check_public_request_rate_limit", {
-      p_limit_key: getDistributedRateLimitKey(request, scope),
-      p_maximum_requests: maximumRequests,
-      p_window_seconds: Math.max(1, Math.ceil(windowMs / 1000)),
-    });
-    const result = Array.isArray(data) ? data[0] as { allowed?: unknown; retry_after_seconds?: unknown } | undefined : undefined;
+    try {
+      const { data, error } = await supabase
+        .rpc("check_public_request_rate_limit", {
+          p_limit_key: getDistributedRateLimitKey(request, scope),
+          p_maximum_requests: maximumRequests,
+          p_window_seconds: Math.max(1, Math.ceil(windowMs / 1000)),
+        })
+        .abortSignal(AbortSignal.timeout(DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS));
+      const result = Array.isArray(data) ? data[0] as { allowed?: unknown; retry_after_seconds?: unknown } | undefined : undefined;
 
-    if (error || typeof result?.allowed !== "boolean") {
-      throw new PublicApiError("RATE_LIMIT_SERVICE_UNAVAILABLE", "Request validation is temporarily unavailable.", 503);
+      if (error || typeof result?.allowed !== "boolean") {
+        throw new Error("The distributed request rate limiter returned an invalid response.");
+      }
+
+      if (!result.allowed) {
+        const retryAfterSeconds = typeof result.retry_after_seconds === "number"
+          ? Math.max(1, Math.ceil(result.retry_after_seconds))
+          : 60;
+        throw new PublicApiError("RATE_LIMIT_EXCEEDED", "Too many requests. Try again shortly.", 429, retryAfterSeconds);
+      }
+
+      return;
+    } catch (error) {
+      if (error instanceof PublicApiError) {
+        throw error;
+      }
+
+      if (process.env.NODE_ENV === "production") {
+        throw new PublicApiError("RATE_LIMIT_SERVICE_UNAVAILABLE", "Request validation is temporarily unavailable.", 503);
+      }
+
+      activateDevelopmentServiceFallback();
+
+      if (!hasWarnedAboutLocalRateLimitFallback) {
+        hasWarnedAboutLocalRateLimitFallback = true;
+        console.warn("Distributed request validation is unavailable; using the development-only in-memory rate limiter.");
+      }
     }
-
-    if (!result.allowed) {
-      const retryAfterSeconds = typeof result.retry_after_seconds === "number"
-        ? Math.max(1, Math.ceil(result.retry_after_seconds))
-        : 60;
-      throw new PublicApiError("RATE_LIMIT_EXCEEDED", "Too many requests. Try again shortly.", 429, retryAfterSeconds);
-    }
-
-    return;
   }
 
   if (process.env.NODE_ENV === "production") {

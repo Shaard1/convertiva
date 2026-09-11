@@ -19,6 +19,8 @@ test("uses per-response nonce CSP without unsafe-inline scripts", () => {
 test("uses atomic distributed request rate limiting and fails closed", () => {
   assert.match(apiHttp, /check_public_request_rate_limit/);
   assert.match(apiHttp, /RATE_LIMIT_SERVICE_UNAVAILABLE/);
+  assert.match(apiHttp, /process\.env\.NODE_ENV === "production"/);
+  assert.match(apiHttp, /development-only in-memory rate limiter/);
   assert.match(schema, /on conflict \(limit_key\) do update/);
   assert.match(schema, /grant execute.*service_role/);
 });

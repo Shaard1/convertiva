@@ -1,4 +1,8 @@
 import { createHash, createHmac } from "node:crypto";
+import {
+  activateDevelopmentServiceFallback,
+  isDevelopmentServiceFallbackActive,
+} from "@/lib/development-service-fallback";
 import { getSupabaseAdminClient } from "@/lib/supabase-server";
 
 type DailyUsageRecord = {
@@ -10,7 +14,16 @@ type GuestUsageRow = {
   conversions_used: number;
 };
 
+const GUEST_USAGE_TIMEOUT_MS = 1_500;
 const guestUsageStore = new Map<string, DailyUsageRecord>();
+let hasWarnedAboutLocalUsageFallback = false;
+
+function warnAboutLocalUsageFallback() {
+  if (hasWarnedAboutLocalUsageFallback) return;
+
+  hasWarnedAboutLocalUsageFallback = true;
+  console.warn("Guest usage persistence is unavailable; using development-only in-memory usage tracking.");
+}
 
 export function getUsageDate() {
   return new Date().toISOString().slice(0, 10);
@@ -63,22 +76,33 @@ export function cacheGuestUsage(
 export async function getGuestUsageCount(key: string, date: string) {
   const supabase = getSupabaseAdminClient();
 
-  if (!supabase) {
+  if (!supabase || isDevelopmentServiceFallbackActive()) {
     return getMemoryGuestUsage(key, date);
   }
 
-  const { data, error } = await supabase
-    .from("guest_conversion_usage")
-    .select("conversions_used")
-    .eq("guest_key", key)
-    .eq("date", date)
-    .maybeSingle();
+  try {
+    const { data, error } = await supabase
+      .from("guest_conversion_usage")
+      .select("conversions_used")
+      .eq("guest_key", key)
+      .eq("date", date)
+      .abortSignal(AbortSignal.timeout(GUEST_USAGE_TIMEOUT_MS))
+      .maybeSingle();
 
-  if (error) {
-    throw error;
+    if (error) {
+      throw error;
+    }
+
+    const conversionsUsed = (data as GuestUsageRow | null)?.conversions_used ?? 0;
+    cacheGuestUsage(key, date, conversionsUsed);
+    return conversionsUsed;
+  } catch (error) {
+    if (process.env.NODE_ENV === "production") {
+      throw error;
+    }
+
+    activateDevelopmentServiceFallback();
+    warnAboutLocalUsageFallback();
+    return getMemoryGuestUsage(key, date);
   }
-
-  const conversionsUsed = (data as GuestUsageRow | null)?.conversions_used ?? 0;
-  cacheGuestUsage(key, date, conversionsUsed);
-  return conversionsUsed;
 }
