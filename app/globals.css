@@ -273,8 +273,8 @@ body::before {
 .button-primary:hover { transform: translateY(-3px); box-shadow: 0 16px 30px rgba(61,89,71,.25); }
 .button-secondary { border: 1px solid var(--border); background: var(--card); color: var(--foreground); }
 .button-secondary:hover { transform: translateY(-3px); border-color: var(--primary); background: var(--background-secondary); }
-.hero-workspace { border: 1px solid var(--border); border-radius: 1.8rem; background: color-mix(in srgb, var(--card) 90%, transparent); box-shadow: 0 24px 70px rgba(52,83,74,.12); padding: 1.1rem; transform: rotate(1.5deg); transition: transform .4s ease, box-shadow .4s ease; }
-.hero-workspace:hover { transform: rotate(0) translateY(-6px); box-shadow: 0 30px 80px rgba(52,83,74,.18); }
+.hero-workspace { border: 1px solid var(--border); border-radius: 1.8rem; background: color-mix(in srgb, var(--card) 90%, transparent); box-shadow: 0 24px 70px rgba(52,83,74,.12); padding: 1.1rem; transition: transform .4s ease, box-shadow .4s ease; }
+.hero-workspace:hover { transform: translateY(-6px); box-shadow: 0 30px 80px rgba(52,83,74,.18); }
 .workspace-top { display: flex; align-items: center; gap: .55rem; padding: .3rem .3rem 1.25rem; font-size: .85rem; font-weight: 700; }
 .status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: #7ba47f; box-shadow: 0 0 0 5px rgba(123,164,127,.15); }
 .workspace-file { display: flex; align-items: center; gap: .85rem; border-radius: 1.25rem; background: var(--card-muted); padding: 1.1rem; }
