@@ -54,9 +54,20 @@ Coming soon tools:
 - Guest and signed-in usage limits
 - Soft green light theme and calm dark theme
 - Responsive homepage, footer, and tool layouts
+- Homepage image picker and drag-and-drop with output format carried into the converter
 - Top route loading indicator for page changes
 - Placeholder tool pages for features that still need external engines
 - First version of a job-oriented platform API under `/api/v1`
+
+### Homepage UI checks
+
+With the app running locally on port 3020, run `npm run test:homepage`. Override
+`HOMEPAGE_TEST_URL` to use a different local URL. The check uses installed Edge
+by default; set `BROWSER_EXECUTABLE_PATH` to use another Chromium executable.
+It covers desktop/mobile layouts, dark mode, file selection, drag-and-drop,
+validation, and the image-converter handoff. Usage and conversion responses are
+fixtures, so it does not consume real quotas or change remote data. Screenshots
+are written to the ignored `test-results/homepage/` directory.
 
 ## Tech stack
 

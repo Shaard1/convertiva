@@ -20,6 +20,7 @@ import {
   LOGGED_IN_HISTORY_LIMIT,
 } from "@/lib/constants";
 import { validateFile } from "@/lib/file";
+import { consumeImageUpload } from "@/lib/pending-image-upload";
 import { formatFileSize, getFileFormatLabel } from "@/lib/format";
 import {
   createAuthenticatedUsage,
@@ -578,6 +579,16 @@ export function ConverterCard() {
       return applyUsageStatusToFiles(filteredFiles, remaining);
     });
   }
+
+  // Drain the homepage handoff once auth/usage has selected the correct limits.
+  // Subsequent renders (including Strict Mode effect replay) find no upload.
+  useEffect(() => {
+    if (isInitializing) return;
+    const upload = consumeImageUpload();
+    if (!upload) return;
+    setOutputFormat(upload.outputFormat);
+    handleFilesSelected(upload.files);
+  });
 
   async function refreshUsageAfterSuccess(successfulConversions: number) {
     if (successfulConversions <= 0) {

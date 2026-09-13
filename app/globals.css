@@ -310,7 +310,7 @@ main .card-shadow button:not(:disabled):hover, main .card-shadow a:hover { trans
 main .card-shadow select, main .card-shadow input { border-color: color-mix(in srgb, var(--border) 90%, transparent); box-shadow: inset 0 1px 0 rgba(255,255,255,.28); }
 
 header { border-color: color-mix(in srgb, var(--border) 72%, transparent) !important; }
-header > div > div { min-height: 74px !important; }
+header > div > div:first-child { min-height: 74px !important; }
 header nav a, header nav button { letter-spacing: -.01em; }
 header nav button:hover, header nav a:hover { transform: translateY(-1px); }
 header [id="converters-menu"] { margin-top: .35rem; max-width: calc(100vw - 2rem); border-radius: 1.25rem; padding: 1rem; box-shadow: 0 24px 65px rgba(24,37,28,.16); animation: menu-drop .2s ease-out both; }
@@ -326,7 +326,7 @@ footer h2 { font-size: .68rem; letter-spacing: .18em; }
 footer a { display: inline-flex; min-height: 32px; align-items: center; }
 footer a:hover { transform: translateX(3px); }
 
-@media (max-width: 48em) { header > div > div { min-height: 66px !important; } main .card-shadow { border-radius: 1.35rem; } footer > div { padding-inline: 1.25rem !important; } }
+@media (max-width: 48em) { header > div > div:first-child { min-height: 66px !important; } main .card-shadow { border-radius: 1.35rem; } footer > div { padding-inline: 1.25rem !important; } }
 
 /* Converter workspaces */
 .converter-stage { padding-block: clamp(2rem, 5vw, 4.5rem) !important; }

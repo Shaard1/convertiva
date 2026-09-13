@@ -1,23 +1,71 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowUpRight, AudioLines, FileImage, FileText, Film, Merge, ScanLine, Sparkles } from "lucide-react";
+import { ArrowDown, ArrowUpRight, Check, Files, ShieldCheck } from "lucide-react";
 import { SitePageShell } from "@/components/SitePageShell";
+import { HomeConverter } from "@/components/HomeConverter";
+import { ConverterToolIcon } from "@/components/ConverterToolIcon";
 import { converterTools } from "@/lib/tools/converterTools";
+import styles from "@/components/Home.module.css";
 
-const featuredIds = ["image-converter", "video-converter", "audio-converter", "document-converter", "compress-jpg", "merge-pdf"];
-const featureIcons = [FileImage, Film, AudioLines, FileText, ScanLine, Merge];
+const toolGroups = [
+  { title: "Convert", description: "A different format. The same idea.", sections: ["Convert files"] },
+  { title: "Compress & combine", description: "Less weight. Everything together.", sections: ["Optimize files", "PDF tools"] },
+  { title: "Package & capture", description: "Ready to save, send, or share.", sections: ["Archive tools", "Website tools"] },
+];
 
 export function PlatformDashboard() {
-  const featured = featuredIds.map((id) => converterTools.find((tool) => tool.id === id)).filter(Boolean);
-  const readyCount = converterTools.filter((tool) => tool.status === "ready").length;
-
-  return <SitePageShell>
-    <div id="main-content" className="overflow-hidden">
-      <section className="hero-section px-4 pb-20 pt-12 sm:px-6 lg:pb-28 lg:pt-20"><div className="mx-auto grid max-w-7xl items-end gap-12 lg:grid-cols-[1.05fr_.95fr]">
-        <div><p className="eyebrow"><Sparkles className="h-4 w-4" /> File tools, without the busywork</p><h1 className="hero-title mt-6 max-w-3xl">Move files forward.</h1><p className="hero-copy mt-6 max-w-xl">Convert, compress, and organize everyday files in one calm, capable workspace.</p><div className="mt-8 flex flex-wrap gap-3"><Link href="/tools/image-converter" className="button-primary">Start converting <ArrowUpRight className="h-4 w-4" /></Link><a href="#tools" className="button-secondary">Explore tools</a></div><div className="mt-10 flex flex-wrap gap-x-7 gap-y-3 text-sm text-[var(--muted-foreground)]"><span><strong className="text-[var(--foreground)]">{readyCount}</strong> tools ready</span><span>Temporary processing</span><span>No clutter</span></div></div>
-        <div className="hero-workspace"><div className="workspace-top"><span className="status-dot" /> Convertiva workspace <span className="ml-auto text-xs text-[var(--muted-foreground)]">ready</span></div><div className="workspace-file"><div className="file-icon"><FileImage className="h-6 w-6" /></div><div><p className="font-semibold">your-next-project.png</p><p className="text-xs text-[var(--muted-foreground)]">2.4 MB · ready to convert</p></div><span className="file-pill">PNG</span></div><div className="workspace-controls"><div><p className="text-xs uppercase tracking-[.16em] text-[var(--muted-foreground)]">Output format</p><p className="mt-2 font-semibold">WEBP <span className="ml-2 text-xs font-normal text-[var(--muted-foreground)]">smaller, web-ready</span></p></div><Link href="/tools/image-converter" className="workspace-action">Open tool <ArrowUpRight className="h-4 w-4" /></Link></div></div>
-      </div></section>
-      <section id="tools" className="tools-section px-4 py-20 sm:px-6 lg:py-28"><div className="mx-auto max-w-7xl"><div className="section-intro"><div><p className="eyebrow">The toolkit</p><h2 className="section-title mt-4">Pick the job.<br className="hidden sm:block" /> We’ll handle the file.</h2></div><p className="max-w-sm text-base leading-7 text-[var(--muted-foreground)]">From a quick image conversion to a folder full of archives, the right tool is never far away.</p></div><div className="tool-grid mt-12">{featured.map((tool, index) => { if (!tool) return null; const Icon = featureIcons[index] ?? FileText; return <Link href={tool.route as Route} key={tool.id} className={`tool-card tool-card-${index + 1}`}><div className="tool-card-head"><span className="tool-icon"><Icon className="h-6 w-6" /></span><span className="tool-arrow"><ArrowUpRight className="h-5 w-5" /></span></div><div className="mt-auto"><p className="tool-kicker">{tool.formats.slice(0, 3).join(" · ")}</p><h3 className="mt-2 text-xl font-semibold">{tool.name}</h3><p className="mt-2 max-w-[27ch] text-sm leading-6 text-[var(--muted-foreground)]">{tool.subtitle}</p></div></Link>; })}</div><div className="mt-7 flex justify-end"><Link href="#formats" className="inline-flex items-center gap-2 text-sm font-semibold text-[var(--primary-dark)] transition hover:gap-3 dark:text-[var(--foreground)]">See all tools <ArrowUpRight className="h-4 w-4" /></Link></div></div></section>
+  const readyTools = converterTools.filter((tool) => tool.status === "ready");
+  return (
+    <div className={styles.page}>
+      <SitePageShell>
+        <div id="main-content" className={styles.content}>
+          <section className={styles.hero} aria-labelledby="home-title">
+            <div className={styles.intro}>
+              <div>
+                <p className={styles.eyebrow}><Files size={15} aria-hidden="true" /> THE EVERYDAY FILE TOOLKIT</p>
+                <h1 id="home-title">File conversion.<br /><span>Straight to it.</span></h1>
+              </div>
+              <div className={styles.introAside}>
+                <p>Images, documents, video, and audio.<br />Get the format you need and get on with your day.</p>
+                <a href="#tools">Find your tool <ArrowDown size={16} aria-hidden="true" /></a>
+              </div>
+            </div>
+            <HomeConverter />
+            <div className={styles.assurance}>
+              <span><Check size={16} aria-hidden="true" /> No sign-up needed to start</span>
+              <span><ShieldCheck size={16} aria-hidden="true" /> Temporary file processing</span>
+              <Link href="/privacy-policy" prefetch={false}>How we handle your files <ArrowUpRight size={14} aria-hidden="true" /></Link>
+            </div>
+          </section>
+          <section id="tools" className={styles.directory} aria-labelledby="tools-title">
+            <div className={styles.directoryHeading}>
+              <div><p className={styles.eyebrow}>THE TOOL DIRECTORY</p><h2 id="tools-title">What’s the file?</h2></div>
+              <p>{readyTools.length} tools, one place.<br />Pick exactly what you need.</p>
+            </div>
+            <div className={styles.toolGroups}>
+              {toolGroups.map((group) => (
+                <div key={group.title} className={styles.toolGroup}>
+                  <h3>{group.title}</h3><p>{group.description}</p>
+                  <ul>
+                    {readyTools.filter((tool) => group.sections.includes(tool.section)).map((tool) => (
+                      <li key={tool.id}>
+                        <Link href={tool.route as Route} prefetch={false}>
+                          <ConverterToolIcon icon={tool.icon} className={styles.directoryIcon} />
+                          <span>{tool.name}</span><ArrowUpRight size={16} aria-hidden="true" />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className={styles.directoryFoot}>
+              <span>Looking for a particular file extension?</span>
+              <Link href="/formats" prefetch={false}>Browse supported formats <ArrowUpRight size={16} aria-hidden="true" /></Link>
+            </div>
+          </section>
+        </div>
+      </SitePageShell>
     </div>
-  </SitePageShell>;
+  );
 }
