@@ -39,10 +39,10 @@ export function ConversionProgressList({
   const activeCount = items.length - finishedCount - failedCount;
 
   return (
-    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-5">
+    <div className="rounded-[var(--radius-surface)] border bg-[var(--card-muted)] p-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-base font-semibold text-[var(--foreground)]">
+          <p role="status" className="text-base font-semibold text-[var(--foreground)]">
             {activeCount > 0
               ? `Converting ${items.length} image${items.length === 1 ? "" : "s"}...`
               : failedCount > 0
@@ -62,10 +62,10 @@ export function ConversionProgressList({
           const isFailed = item.stage === "failed";
 
           return (
-            <div key={item.id} className="rounded-2xl border bg-[var(--card)] p-4">
+            <div key={item.id} className="rounded-[var(--radius-notice)] border bg-[var(--card)] p-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 gap-3">
-                  <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--background-secondary)] text-[var(--primary)]">
+                  <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-notice)] bg-[var(--background-secondary)] text-[var(--primary)]">
                     <FileImage className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
@@ -125,7 +125,7 @@ export function ConversionProgressList({
                   </span>
                 </div>
 
-                <div className="h-2.5 overflow-hidden rounded-full bg-[var(--background-secondary)]">
+                <div role="progressbar" aria-label={`Conversion progress for ${item.fileName}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={item.progress} className="h-2.5 overflow-hidden rounded-full bg-[var(--background-secondary)]">
                   <div
                     className={`h-full rounded-full transition-[width] duration-300 ${
                       isFailed ? "bg-[var(--danger)]" : "bg-[var(--primary)]"

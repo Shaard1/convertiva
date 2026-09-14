@@ -252,7 +252,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
               autoComplete="email"
               required
               placeholder="you@example.com"
-              className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
+              className="w-full rounded-[var(--radius-notice)] border bg-[var(--card-muted)] px-4 py-3 text-sm transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
             />
           </div>
 
@@ -271,7 +271,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
                   required
                   minLength={activeMode === "signup" ? 12 : 6}
                   placeholder={activeMode === "signup" ? "At least 12 characters" : "Your password"}
-                  className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
+                  className="w-full rounded-[var(--radius-notice)] border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
                 />
                 <button
                   type="button"
@@ -304,7 +304,7 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
                   required
                   minLength={12}
                   placeholder="Repeat your password"
-                  className="w-full rounded-2xl border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm outline-none transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
+                  className="w-full rounded-[var(--radius-notice)] border bg-[var(--card-muted)] px-4 py-3 pr-12 text-sm transition focus:border-[var(--primary)] focus-visible:ring-2 focus-visible:ring-[var(--primary)]/20"
                 />
                 <button
                   type="button"
@@ -325,14 +325,14 @@ export function AuthModal({ isOpen, mode, onClose }: AuthModalProps) {
           {error ? (
             <div
               role="alert"
-              className="rounded-2xl border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]"
+              className="rounded-[var(--radius-notice)] border border-[var(--danger)]/30 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]"
             >
               {error}
             </div>
           ) : null}
 
           {success ? (
-            <div className="rounded-2xl border border-[var(--primary)]/25 bg-[var(--background-secondary)] px-4 py-3 text-sm text-[var(--foreground)]">
+            <div className="rounded-[var(--radius-notice)] border border-[var(--primary)]/25 bg-[var(--background-secondary)] px-4 py-3 text-sm text-[var(--foreground)]">
               {success}
             </div>
           ) : null}

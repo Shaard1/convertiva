@@ -22,14 +22,14 @@ export function BatchResultList({
   const heading = files.length === 1 ? "Your image is ready." : "Your images are ready.";
 
   return (
-    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-5">
+    <div className="rounded-[var(--radius-surface)] border bg-[var(--card-muted)] p-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex gap-3">
           <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--background-secondary)] text-[var(--success)]">
             <CheckCircle2 className="h-5 w-5" />
           </span>
           <div>
-          <p className="text-lg font-semibold text-[var(--foreground)]">{heading}</p>
+          <p role="status" className="text-lg font-semibold text-[var(--foreground)]">{heading}</p>
           <p className="mt-1 text-sm text-[var(--muted-foreground)]">
             Ready to download. New conversions will be added here.
           </p>
@@ -42,7 +42,7 @@ export function BatchResultList({
           <button
             type="button"
             onClick={onDownloadAll}
-            className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--primary)] bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:-translate-y-0.5 hover:bg-[var(--background-secondary)]"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--primary)] bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:bg-[var(--background-secondary)]"
           >
             <Files className="h-4 w-4" />
             Download all as ZIP
@@ -54,7 +54,7 @@ export function BatchResultList({
         {files.map((file) => (
           <div
             key={file.id}
-            className="flex flex-col gap-4 rounded-2xl border bg-[var(--card)] p-4 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-4 rounded-[var(--radius-notice)] border bg-[var(--card)] p-4 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-[var(--foreground)]">
@@ -68,7 +68,7 @@ export function BatchResultList({
               <a
                 href={file.downloadUrl}
                 download={file.fileName}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-[var(--primary)] bg-[var(--primary-dark)] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#2F4A35]"
+                className="button-primary"
               >
                 <Download className="h-4 w-4" />
                 Download

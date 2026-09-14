@@ -20,7 +20,7 @@ export function ConversionHistoryList({ items }: ConversionHistoryListProps) {
   }
 
   return (
-    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-5">
+    <div className="rounded-[var(--radius-surface)] border bg-[var(--card-muted)] p-5">
       <div className="flex items-center gap-2">
         <History className="h-4 w-4 text-[var(--primary)]" />
         <p className="text-base font-semibold text-[var(--foreground)]">
@@ -32,7 +32,7 @@ export function ConversionHistoryList({ items }: ConversionHistoryListProps) {
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex flex-col gap-4 rounded-2xl border bg-[var(--card)] p-4 sm:flex-row sm:items-center sm:justify-between"
+            className="flex flex-col gap-4 rounded-[var(--radius-notice)] border bg-[var(--card)] p-4 sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="min-w-0">
               <p className="truncate text-sm font-medium text-[var(--foreground)]">
@@ -46,7 +46,7 @@ export function ConversionHistoryList({ items }: ConversionHistoryListProps) {
             <a
               href={item.downloadUrl}
               download={item.fileName}
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--primary)] bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:-translate-y-0.5 hover:bg-[var(--background-secondary)]"
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-[var(--primary)] bg-[var(--card)] px-4 py-3 text-sm font-semibold text-[var(--primary)] transition hover:bg-[var(--background-secondary)]"
             >
               <Download className="h-4 w-4" />
               Download

@@ -68,14 +68,14 @@ export function LegalPage({
               ))}
             </nav>
           </aside>
-          <div className="legal-sections">
+          <article className="legal-sections">
             {sections.map(([sectionTitle, body]) => (
               <section id={sectionId(idPrefix, sectionTitle)} key={sectionTitle}>
                 <h2>{sectionTitle}</h2>
                 <p>{body}</p>
               </section>
             ))}
-          </div>
+          </article>
         </div>
       </section>
     </SitePageShell>

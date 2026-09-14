@@ -14,7 +14,7 @@ export function SectionHeading({
   return (
     <div className={center ? "mx-auto max-w-2xl text-center" : "max-w-2xl"}>
       {badge ? (
-        <span className="mb-4 inline-flex rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-sm font-medium text-[var(--primary)]">
+        <span className="eyebrow mb-4">
           {badge}
         </span>
       ) : null}

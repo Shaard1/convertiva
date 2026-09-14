@@ -2,6 +2,8 @@
 
 **Major Update:** Convertiva is now a hardened, job-oriented file conversion platform built with Next.js. It includes dedicated tools for images, video, audio, documents, archives, PDFs, website capture, and spreadsheets, backed by a consistent public API, persistent jobs, bounded processing, and worker-ready media conversion.
 
+The cross-page visual and interaction standard is documented in [DESIGN.md](DESIGN.md).
+
 ## Major update highlights
 
 - One source of truth for converter capabilities, engines, formats, and upload policies

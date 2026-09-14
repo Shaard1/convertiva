@@ -1,8 +1,8 @@
 export function CTASection() {
   return (
-    <section className="section-fade py-16 sm:py-20">
+    <section className="section-fade py-10">
       <div className="mx-auto max-w-5xl px-6">
-        <div className="card-shadow rounded-[1.5rem] border bg-[var(--card)] px-6 py-10 text-center sm:px-12 sm:py-12">
+        <div className="rounded-[var(--radius-notice)] border bg-[var(--card-muted)] p-6 text-left">
           <h2 className="text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-4xl">
             Ready to convert?
           </h2>
@@ -11,7 +11,7 @@ export function CTASection() {
           </p>
           <a
             href="#converter"
-            className="mt-8 inline-flex rounded-full bg-[#3E5F44] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#2F4A35]"
+            className="button-primary mt-5"
           >
             Upload images
           </a>

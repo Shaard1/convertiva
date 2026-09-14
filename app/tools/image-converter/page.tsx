@@ -7,7 +7,7 @@ import { SupportedFormats } from "@/components/SupportedFormats";
 
 export default function ImageConverterPage() {
   return (
-    <div className="page-shell min-h-screen text-[var(--foreground)]">
+    <div className="page-shell converter-page min-h-screen text-[var(--foreground)]">
       <ConverterCard />
 
       <SupportedFormats />
@@ -15,7 +15,7 @@ export default function ImageConverterPage() {
 
       <section className="soft-section section-fade py-16 sm:py-20">
         <div className="mx-auto max-w-5xl px-6">
-          <div className="rounded-[1.5rem] border bg-[var(--card)] p-6 sm:p-8">
+          <div className="py-6 sm:py-8">
             <SectionHeading
               badge="Why sign up"
               title="More room when you need it"
@@ -23,13 +23,13 @@ export default function ImageConverterPage() {
               center={false}
             />
             <div className="mt-8 grid gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
+              <div className="border-t py-5 text-sm text-[var(--muted-foreground)]">
                 Guest users get 15 conversions per day.
               </div>
-              <div className="rounded-2xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
+              <div className="border-t py-5 text-sm text-[var(--muted-foreground)]">
                 Logged-in free users get 75 conversions per day.
               </div>
-              <div className="rounded-2xl border bg-[var(--card-muted)] p-5 text-sm text-[var(--muted-foreground)]">
+              <div className="border-t py-5 text-sm text-[var(--muted-foreground)]">
                 Logged-in users keep their last 20 conversions for 24 hours.
               </div>
             </div>

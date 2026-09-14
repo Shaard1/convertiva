@@ -57,7 +57,7 @@ const linkClass =
 const loginButtonClass =
   "inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold text-[var(--foreground)] transition hover:bg-[var(--background-secondary)]";
 const signupButtonClass =
-  "inline-flex items-center justify-center rounded-full border border-[var(--primary)]/35 bg-[var(--card)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-dark)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] dark:text-[var(--foreground)]";
+  "inline-flex items-center justify-center rounded-full border border-[var(--primary)]/35 bg-[var(--card)] px-4 py-2.5 text-sm font-semibold text-[var(--primary-dark)] transition hover:border-[var(--primary)] dark:text-[var(--foreground)]";
 
 export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
   const pathname = usePathname();
@@ -273,7 +273,7 @@ export function Navbar({ user, usage, onOpenAuth, onLogout }: NavbarProps) {
               onPointerEnter={preloadConvertersMenu}
               aria-label={isMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               aria-expanded={isMenuOpen}
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full border bg-[var(--card)] text-[var(--foreground)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] lg:hidden"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full border bg-[var(--card)] text-[var(--foreground)] transition hover:border-[var(--primary)] lg:hidden"
             >
               {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>

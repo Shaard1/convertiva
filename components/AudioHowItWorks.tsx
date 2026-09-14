@@ -1,3 +1,4 @@
+import support from "@/components/ToolSupport.module.css";
 import { Download, Music, SlidersHorizontal } from "lucide-react";
 import { SectionHeading } from "@/components/SectionHeading";
 
@@ -21,7 +22,7 @@ const steps = [
 
 export function AudioHowItWorks() {
   return (
-    <section id="how-it-works" className="section-fade py-16 sm:py-20">
+    <section id="how-it-works" className={`${support.section} section-fade py-16 sm:py-20`}>
       <div className="mx-auto max-w-7xl px-6">
         <SectionHeading
           badge="How it works"
@@ -36,7 +37,7 @@ export function AudioHowItWorks() {
             return (
               <div
                 key={step.title}
-                className="rounded-[1.5rem] border bg-[var(--card)] p-6 transition duration-300 hover:-translate-y-1"
+                className="rounded-[1.5rem] border bg-[var(--card)] p-6 transition duration-300"
               >
                 <div className="flex items-center gap-4">
                   <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--background-secondary)] text-base font-semibold text-[var(--primary)]">

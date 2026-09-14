@@ -1,5 +1,9 @@
 "use client";
 
+import styles from "@/components/ConverterLayout.module.css";
+import support from "@/components/ToolSupport.module.css";
+import { ConversionAvailability } from "@/components/ConversionAvailability";
+
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
@@ -210,9 +214,9 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
       <Navbar user={user} usage={usage} onOpenAuth={openAuth} onLogout={handleLogout} />
 
       <main>
-        <section className="converter-stage relative px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
+        <section className={styles.stage}>
           <div className="converter-frame mx-auto max-w-7xl">
-            <div className="converter-shell card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
+            <div className={styles.layout}>
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                   <ConverterToolIcon icon={tool.icon} className="h-4 w-4" />
@@ -226,9 +230,9 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
                 </p>
               </div>
 
-              <div className="mt-7 space-y-4">
+              <div className={styles.workbench}>
                 {config.inputMode === "url" ? (
-                  <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-5">
+                  <div className={styles.urlInput}>
                     <label className="space-y-2">
                       <span className="text-sm font-semibold text-[var(--foreground)]">
                         Website URL
@@ -242,7 +246,7 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
                             setWebsiteUrl(event.target.value);
                           }}
                           placeholder={config.urlPlaceholder}
-                          className="min-w-0 flex-1 bg-transparent text-sm text-[var(--foreground)] outline-none placeholder:text-[var(--muted-foreground)]"
+                          className="min-w-0 flex-1 bg-transparent text-sm text-[var(--foreground)] placeholder:text-[var(--muted-foreground)]"
                         />
                       </div>
                     </label>
@@ -319,7 +323,9 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
                   </div>
                 ) : null}
 
-                <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-3 sm:p-3.5">
+                <div className={styles.settings}>
+                  <ConversionAvailability usage={usage} />
+                  {config.maxFiles ? <p className="mb-4 text-xs text-[var(--muted-foreground)]">Up to {config.maxFiles} files per batch</p> : null}
                   <div className="grid gap-3 md:grid-cols-2 md:items-start">
                     <div className="space-y-2">
                       <p className="text-sm font-semibold text-[var(--foreground)]">
@@ -328,12 +334,13 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
                       {config.outputFormats?.length ? (
                         <label className="block">
                           <select
+                            aria-label="Convert to"
                             value={outputFormat}
                             onChange={(event) => {
                               resetResultState();
                               setOutputFormat(event.target.value);
                             }}
-                            className="min-h-[48px] w-full rounded-2xl border bg-[var(--card)] px-3 py-2.5 text-sm font-semibold text-[var(--foreground)] outline-none focus:border-[var(--primary)]"
+                            className="min-h-[48px] w-full rounded-2xl border bg-[var(--card)] px-3 py-2.5 text-sm font-semibold text-[var(--foreground)] focus:border-[var(--primary)]"
                           >
                             {config.outputFormats.map((format) => (
                               <option key={format.value} value={format.value}>
@@ -383,7 +390,7 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
 
                 {message ? (
                   <div
-                    role={status === "failed" ? "alert" : undefined}
+                    role={status === "failed" ? "alert" : "status"}
                     className={`rounded-2xl border px-4 py-3 text-sm ${
                       status === "failed"
                         ? "border-[var(--danger)]/30 bg-[var(--danger)]/10 text-[var(--danger)]"
@@ -423,7 +430,7 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
                   </div>
                 ) : null}
 
-                <div className="flex gap-3 rounded-[1.25rem] border bg-[var(--card-muted)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+                <div className={`${styles.runtime} flex gap-3 text-sm text-[var(--muted-foreground)]`}>
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary)]" />
                   <p className="leading-6">
                     Files are checked before processing. Guest limits reset daily.
@@ -434,7 +441,7 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
           </div>
         </section>
 
-        <section id="formats" className="soft-section section-fade py-16 sm:py-20">
+        <section id="formats" className={`${support.section} soft-section`}>
           <div className="mx-auto max-w-5xl px-6">
             <SectionHeading
               badge="Formats"
@@ -456,7 +463,7 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
           </div>
         </section>
 
-        <section id="how-it-works" className="section-fade py-16 sm:py-20">
+        <section id="how-it-works" className={support.section}>
           <div className="mx-auto max-w-7xl px-6">
             <SectionHeading
               badge="How it works"

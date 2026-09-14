@@ -1,0 +1,13 @@
+.section { padding-block: 40px !important; border-top: 1px solid var(--border); }
+.section > div { max-width: 1248px; padding-inline: 32px; }
+.section :global(.text-center) { text-align: left; }
+.section :global(.max-w-2xl) { margin-inline: 0; }
+.section :global(.mt-10) { margin-top: 24px; }
+.section :global(.mt-10.border) { padding: 20px 0 0; border-width: 1px 0 0; background: none; border-radius: 0; }
+.section :global(.grid) > div { padding: 16px 0; border-width: 1px 0 0; border-radius: 0; background: none; transform: none; box-shadow: none; }
+.section :global(.grid) > div > :global(.flex) > div { background: none; border: 0; border-radius: 0; height: 24px; width: 24px; }
+.section :global(.grid) > div h3 { margin-top: 16px; }
+.section :global(.inline-flex) { box-shadow: none; border-radius: var(--radius-control); }
+.section h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 600; letter-spacing: -.035em; }
+@media (max-width: 60em) { .section > div { padding-inline: 24px; } }
+@media (max-width: 44em) { .section { padding-block: 32px !important; } .section > div { padding-inline: 16px; } }

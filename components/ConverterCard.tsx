@@ -1,5 +1,8 @@
 "use client";
 
+import styles from "@/components/ConverterLayout.module.css";
+import { ConversionAvailability } from "@/components/ConversionAvailability";
+
 import { useEffect, useRef, useState } from "react";
 import type { AuthChangeEvent, Session } from "@supabase/supabase-js";
 import { LoaderCircle, ShieldCheck, Sparkles, X } from "lucide-react";
@@ -946,10 +949,10 @@ export function ConverterCard() {
       />
 
       <main className="converter-page" data-tool-kind="image">
-        <section className="converter-stage relative overflow-visible px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
+        <section className={styles.stage}>
           <div className="converter-frame mx-auto max-w-7xl">
             <div id="converter" className="converter-spotlight scroll-mt-28">
-              <div className="converter-shell card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
+              <div className={styles.layout}>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
@@ -965,16 +968,16 @@ export function ConverterCard() {
                   </div>
                 </div>
 
-                <div className="mt-7 space-y-5">
+                <div className={styles.workbench}>
                   {!hasSelectedFiles ? (
                     <UploadBox
                       onFilesSelected={handleFilesSelected}
                     />
                   ) : null}
 
-                  <div className="space-y-4">
+                  <div className={styles.filesContents}>
                     {hasSelectedFiles ? (
-                      <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-3 sm:p-4">
+                      <div className="upload-compact-wrap">
                         <UploadBox
                           onFilesSelected={handleFilesSelected}
                           compact
@@ -996,7 +999,8 @@ export function ConverterCard() {
                       />
                     )}
 
-                    <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-3 sm:p-3.5">
+                    <div className={styles.settings}>
+                      <ConversionAvailability usage={usage} />
                       <div className="grid gap-3 md:grid-cols-2 md:items-start">
                         <div>
                           <FormatSelector value={outputFormat} onChange={setOutputFormat} />
@@ -1047,20 +1051,20 @@ export function ConverterCard() {
                         </div>
                       </div>
                       {exceedsLimitMessage ? (
-                        <div className="mt-4 rounded-2xl border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
+                        <div role="alert" className="mt-4 rounded-2xl border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
                           {exceedsLimitMessage}
                         </div>
                       ) : null}
 
                       {exceedsBatchMessage ? (
-                        <div className="mt-4 rounded-2xl border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
+                        <div role="alert" className="mt-4 rounded-2xl border border-[var(--danger)]/35 bg-[var(--danger)]/10 px-4 py-3 text-sm text-[var(--danger)]">
                           {exceedsBatchMessage}
                         </div>
                       ) : null}
 
                     </div>
 
-                    <div className="flex gap-3 rounded-[1.25rem] border bg-[var(--card-muted)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+                    <div className={`${styles.runtime} flex gap-3 text-sm text-[var(--muted-foreground)]`}>
                       <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary)]" />
                       <p className="leading-6">
                         Files are processed temporarily. Guest downloads expire after 1 hour.
@@ -1136,7 +1140,7 @@ export function ConverterCard() {
               <button
                 type="button"
                 onClick={closeOptionsModal}
-                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--card-muted)] text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:shadow-none"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--card-muted)] text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)] focus-visible:shadow-none"
                 aria-label="Close image options"
               >
                 <X className="h-4 w-4" />
@@ -1158,7 +1162,7 @@ export function ConverterCard() {
                     setDraftWidthInput(event.target.value.replace(/[^\d]/g, ""))
                   }
                   placeholder="Auto width"
-                  className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus:outline-none focus-visible:outline-none focus-visible:shadow-none"
+                  className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] focus:border-[var(--primary)] focus-visible:shadow-none"
                 />
               </label>
               <label className="space-y-1">
@@ -1173,7 +1177,7 @@ export function ConverterCard() {
                     setDraftHeightInput(event.target.value.replace(/[^\d]/g, ""))
                   }
                   placeholder="Auto height"
-                  className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus:outline-none focus-visible:outline-none focus-visible:shadow-none"
+                  className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] focus:border-[var(--primary)] focus-visible:shadow-none"
                 />
               </label>
               </div>

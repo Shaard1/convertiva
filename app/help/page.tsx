@@ -15,4 +15,25 @@ const faqs = [
   ["Can I convert several files?", "Image conversion supports batches. Merge PDF and Create Archive accept multiple files. Other tools currently accept one input at a time."],
 ] as const satisfies readonly (readonly [question: string, answer: string])[];
 
-export default function HelpPage() { return <SitePageShell><section className="help-hero"><div className="editorial-wrap text-center"><h1>What can we help you finish?</h1><p>Start with a topic or use the answers below to solve common conversion problems.</p></div></section><section className="editorial-section"><div className="editorial-wrap"><div className="help-topics">{topics.map(({ icon: Icon, title, text }) => <article key={title}><Icon className="h-6 w-6" /><h2>{title}</h2><p>{text}</p></article>)}</div><div className="faq-layout"><div><p className="eyebrow">Common questions</p><h2 className="section-title mt-4">Answers without the runaround.</h2></div><FaqAccordion items={faqs} /></div><div className="support-strip"><TriangleAlert className="h-5 w-5" /><div><h2>Still stuck?</h2><p>Include the converter name, input format, file size, and exact error when contacting support. Do not attach confidential files.</p></div><Link href="/contact">Contact support <ArrowUpRight className="h-4 w-4" /></Link></div><div className="privacy-strip"><ShieldCheck className="h-5 w-5" /> Files are processed temporarily and are not intended as permanent cloud storage.</div></div></section></SitePageShell>; }
+export default function HelpPage() {
+  return <SitePageShell>
+    <section className="help-hero"><div className="editorial-wrap text-center">
+      <h1>What can we help you finish?</h1>
+      <p>Start with a topic or use the answers below to solve common conversion problems.</p>
+    </div></section>
+    <section className="editorial-section"><div className="editorial-wrap">
+      <div className="faq-layout">
+        <div><p className="eyebrow">Common questions</p><h2 className="section-title mt-4">Answers without the runaround.</h2></div>
+        <FaqAccordion items={faqs} />
+      </div>
+      <div className="help-topics">
+        {topics.map(({ icon: Icon, title, text }) => <article key={title}><Icon className="h-6 w-6" /><h2>{title}</h2><p>{text}</p></article>)}
+      </div>
+      <div className="support-strip"><TriangleAlert className="h-5 w-5" />
+        <div><h2>Still stuck?</h2><p>Include the converter name, input format, file size, and exact error when contacting support. Do not attach confidential files.</p></div>
+        <Link href="/contact">Contact support <ArrowUpRight className="h-4 w-4" /></Link>
+      </div>
+      <div className="privacy-strip"><ShieldCheck className="h-5 w-5" /> Files are processed temporarily and are not intended as permanent cloud storage.</div>
+    </div></section>
+  </SitePageShell>;
+}

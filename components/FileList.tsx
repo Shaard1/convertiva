@@ -14,8 +14,8 @@ export function FileList({ files, onRemove, onOpenOptions }: FileListProps) {
   }
 
   return (
-    <div className="space-y-3" aria-label="Selected files">
-      <div className="flex items-center justify-between rounded-2xl border bg-[var(--card-muted)] px-4 py-3">
+    <div className="selected-file-rows" aria-label="Selected files">
+      <div className="flex items-center justify-between rounded-[var(--radius-notice)] border bg-[var(--card-muted)] px-4 py-3">
         <p className="text-sm font-semibold text-[var(--foreground)]">
           {files.length} image{files.length === 1 ? "" : "s"} selected
         </p>
@@ -23,7 +23,7 @@ export function FileList({ files, onRemove, onOpenOptions }: FileListProps) {
       {files.map((file) => (
         <div
           key={file.id}
-          className={`flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${
+          className={`flex flex-col gap-3 rounded-[var(--radius-notice)] border p-4 sm:flex-row sm:items-center sm:justify-between ${
             file.status === "over_limit"
               ? "border-[var(--danger)]/35 bg-[var(--danger)]/10"
               : "bg-[var(--card-muted)]"

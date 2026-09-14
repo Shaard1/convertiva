@@ -46,12 +46,13 @@ export default function AuthCallbackPage() {
   }, [router]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl items-center justify-center px-6">
+    <main className="auth-page mx-auto flex min-h-screen max-w-xl items-center justify-center px-6">
       <div className="w-full rounded-3xl border bg-[var(--card)] p-8 text-center">
+        <h1 className="mb-6">Signing you in</h1>
         {error ? (
-          <p className="text-sm text-[var(--danger)]">{error}</p>
+          <p role="alert" className="text-sm text-[var(--danger)]">{error}</p>
         ) : (
-          <div className="inline-flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
+          <div role="status" className="inline-flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
             <LoaderCircle className="h-4 w-4 animate-spin" />
             Completing sign in...
           </div>

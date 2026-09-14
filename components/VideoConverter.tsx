@@ -1,12 +1,14 @@
 "use client";
 
-import { ChangeEvent, DragEvent, RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { FormatPicker } from "@/components/FormatPicker";
+import styles from "@/components/ConverterLayout.module.css";
+import { ConversionAvailability } from "@/components/ConversionAvailability";
+
+import { ChangeEvent, DragEvent, RefObject, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  ChevronDown,
   Film,
   LoaderCircle,
-  Search,
   Settings2,
   ShieldCheck,
   Trash2,
@@ -224,9 +226,9 @@ export function VideoConverter() {
     <>
       <Navbar user={user} usage={usage} onOpenAuth={openAuth} onLogout={handleLogout} />
       <main className="converter-page" data-tool-kind="video">
-        <section className="converter-stage relative px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
+        <section className={styles.stage}>
           <div className="converter-frame mx-auto max-w-7xl">
-            <div className="converter-shell card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
+            <div className={styles.layout}>
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                   <Film className="h-4 w-4" />
@@ -240,7 +242,7 @@ export function VideoConverter() {
                 </p>
               </div>
 
-              <div className="mt-7 space-y-4">
+              <div className={styles.workbench}>
                 <div
                   onDragOver={(event) => {
                     event.preventDefault();
@@ -320,7 +322,9 @@ export function VideoConverter() {
                   </div>
                 ) : null}
 
-                <div className="rounded-[1.5rem] border bg-[var(--card-muted)] p-3 sm:p-3.5">
+                <div className={styles.settings}>
+                  <ConversionAvailability usage={usage} />
+                  <p className="mb-4 text-xs text-[var(--muted-foreground)]">One video · Up to 250 MB</p>
                   <div className="grid gap-3 md:grid-cols-2 md:items-start">
                     <VideoFormatDropdown value={outputFormat} onChange={setOutputFormat} />
                     <div className="space-y-1">
@@ -360,7 +364,7 @@ export function VideoConverter() {
 
                 {message ? (
                   <div
-                    role={status === "failed" ? "alert" : undefined}
+                    role={status === "failed" ? "alert" : "status"}
                     className={`rounded-2xl border px-4 py-3 text-sm ${
                       status === "failed"
                         ? "border-[var(--danger)]/30 bg-[var(--danger)]/10 text-[var(--danger)]"
@@ -396,7 +400,7 @@ export function VideoConverter() {
                   </div>
                 ) : null}
 
-                <div className="flex gap-3 rounded-[1.25rem] border bg-[var(--card-muted)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+                <div className={`${styles.runtime} flex gap-3 text-sm text-[var(--muted-foreground)]`}>
                   <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[var(--primary)]" />
                   <p className="leading-6">
                     Video files are checked before conversion. Guest limits reset daily.
@@ -437,124 +441,7 @@ function VideoFormatDropdown({
   value: VideoFormat;
   onChange: (format: VideoFormat) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState(videoFormatCategories[0].label);
-  const rootRef = useRef<HTMLDivElement | null>(null);
-
-  const activeFormats = useMemo(() => {
-    const category =
-      videoFormatCategories.find((item) => item.label === activeCategory) ??
-      videoFormatCategories[0];
-    const normalizedQuery = query.trim().toLowerCase();
-
-    if (!normalizedQuery) {
-      return category.formats;
-    }
-
-    return category.formats.filter((format) =>
-      format.toLowerCase().includes(normalizedQuery),
-    );
-  }, [activeCategory, query]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      return;
-    }
-
-    function handleClick(event: MouseEvent) {
-      if (!rootRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isOpen]);
-
-  return (
-    <div className="w-full" ref={rootRef}>
-      <p className="mb-2 text-sm font-semibold text-[var(--foreground)]">Convert to</p>
-      <div className="relative">
-        <button
-          type="button"
-          aria-expanded={isOpen}
-          onClick={() => setIsOpen((current) => !current)}
-          className={`flex min-h-[48px] w-full items-center justify-between border bg-[var(--card)] px-3 py-2.5 text-left text-sm font-semibold text-[var(--foreground)] transition hover:border-[var(--primary)] ${
-            isOpen ? "rounded-t-2xl rounded-b-none border-[var(--primary)]" : "rounded-2xl"
-          }`}
-        >
-          {value}
-          <ChevronDown className={`h-4 w-4 transition ${isOpen ? "rotate-180" : ""}`} />
-        </button>
-        <div
-          className={`absolute left-0 top-full z-40 w-full overflow-hidden rounded-b-2xl border border-[var(--primary)] border-t-0 bg-[var(--card)] shadow-xl transition-all duration-180 ease-out ${
-            isOpen ? "visible translate-y-0 opacity-100" : "pointer-events-none invisible -translate-y-1 opacity-0"
-          }`}
-        >
-          <div className="border-b px-3 py-2">
-            <div className="flex h-9 items-center gap-2 rounded-md border border-transparent bg-transparent px-2 transition-colors hover:bg-[var(--card-muted)] focus-within:border-[var(--border)] focus-within:bg-[var(--card-muted)]">
-              <Search className="h-4 w-4 text-[var(--muted-foreground)]" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search format"
-                className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[var(--muted-foreground)] focus-visible:outline-none focus-visible:shadow-none"
-              />
-            </div>
-          </div>
-          <div className="grid min-h-56 grid-cols-1 sm:grid-cols-[8.5rem_minmax(0,1fr)]">
-            <div className="flex overflow-x-auto border-b bg-[var(--card-muted)] py-2 text-sm sm:block sm:overflow-visible sm:border-b-0 sm:border-r">
-              {videoFormatCategories.map((category) => (
-                <button
-                  key={category.label}
-                  type="button"
-                  onClick={() => setActiveCategory(category.label)}
-                  className={`block w-auto shrink-0 px-3 py-1.5 text-left font-semibold transition sm:w-full ${
-                    activeCategory === category.label
-                      ? "bg-[var(--background-secondary)] text-[var(--foreground)]"
-                      : "text-[var(--foreground)] hover:bg-[var(--background-secondary)]"
-                  }`}
-                >
-                  {category.label}
-                </button>
-              ))}
-            </div>
-            <div className="space-y-3 p-3">
-              <p className="text-xs font-semibold text-[var(--muted-foreground)]">
-                {activeCategory} formats
-              </p>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                {activeFormats.map((format) => (
-                  <button
-                    key={format}
-                    type="button"
-                    onClick={() => {
-                      onChange(format);
-                      setIsOpen(false);
-                      setQuery("");
-                    }}
-                    className={`min-h-10 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
-                      value === format
-                        ? "border-[var(--primary)] bg-[var(--background-secondary)] text-[var(--primary-dark)]"
-                        : "border-[var(--border)] bg-[var(--card-muted)] text-[var(--foreground)] hover:border-[var(--primary)] hover:bg-[var(--background-secondary)]"
-                    }`}
-                  >
-                    {format}
-                  </button>
-                ))}
-              </div>
-              {!activeFormats.length ? (
-                <p className="rounded-xl border bg-[var(--card-muted)] px-3 py-4 text-center text-sm text-[var(--muted-foreground)]">
-                  No matching format.
-                </p>
-              ) : null}
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <FormatPicker value={value} onChange={onChange} categories={videoFormatCategories} />;
 }
 
 function VideoOptionsModal({
@@ -600,7 +487,7 @@ function VideoOptionsModal({
             <button
               type="button"
               onClick={onClose}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--card-muted)] text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)] focus-visible:outline-none focus-visible:shadow-none"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--card-muted)] text-[var(--muted-foreground)] transition hover:bg-[var(--background-secondary)] hover:text-[var(--foreground)] focus-visible:shadow-none"
               aria-label="Close video options"
             >
               <X className="h-4 w-4" />
@@ -669,7 +556,7 @@ function VideoOptionsModal({
                 value={draftOptions.trimStart}
                 onChange={(event) => updateOption("trimStart", event.target.value)}
                 placeholder="00:00"
-                className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus-visible:outline-none focus-visible:shadow-none"
+                className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] focus:border-[var(--primary)] focus-visible:shadow-none"
               />
             </label>
             <label className="space-y-1">
@@ -680,7 +567,7 @@ function VideoOptionsModal({
                 value={draftOptions.trimEnd}
                 onChange={(event) => updateOption("trimEnd", event.target.value)}
                 placeholder="00:30"
-                className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus-visible:outline-none focus-visible:shadow-none"
+                className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] focus:border-[var(--primary)] focus-visible:shadow-none"
               />
             </label>
           </div>
@@ -728,7 +615,7 @@ function OptionSelect({
         ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] outline-none focus:border-[var(--primary)] focus-visible:outline-none focus-visible:shadow-none"
+        className="min-h-10 w-full rounded-xl border bg-[var(--card-muted)] px-3 text-sm text-[var(--foreground)] focus:border-[var(--primary)] focus-visible:shadow-none"
       >
         {options.map((option) => (
           <option key={option} value={option}>

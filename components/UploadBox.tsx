@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, DragEvent, useRef, useState } from "react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
 import {
   ChevronDown,
@@ -73,6 +73,27 @@ export function UploadBox({
   const [isUrlFormOpen, setIsUrlFormOpen] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [isImportingUrl, setIsImportingUrl] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+        menuTriggerRef.current?.focus();
+      }
+    }
+    function handleOutside(event: MouseEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) setIsMenuOpen(false);
+    }
+    document.addEventListener("keydown", handleKey);
+    document.addEventListener("mousedown", handleOutside);
+    return () => {
+      document.removeEventListener("keydown", handleKey);
+      document.removeEventListener("mousedown", handleOutside);
+    };
+  }, [isMenuOpen]);
 
   function handleFiles(fileList: FileList | null) {
     if (!fileList) {
@@ -169,11 +190,11 @@ export function UploadBox({
       onDrop={handleDrop}
       className={clsx(
         "cursor-pointer border border-dashed text-center transition duration-200",
-        compact ? "rounded-2xl px-4 py-4" : "rounded-[1.5rem] px-5 py-6 sm:px-6 sm:py-7",
+        compact ? "upload-compact rounded-[var(--radius-notice)] px-4 py-4" : "rounded-[var(--radius-surface)] px-5 py-6 sm:px-6 sm:py-7",
         isRejected
           ? "border-[var(--danger)] bg-[var(--danger)]/10"
           : isDragging
-            ? "scale-[1.01] border-[var(--primary)] bg-[var(--background-secondary)] shadow-[0_16px_40px_rgba(62,95,68,0.12)]"
+            ? "border-[var(--primary)] bg-[var(--background-secondary)]"
           : "border-[var(--primary-soft)] bg-[var(--card-muted)] hover:border-[var(--primary)] hover:bg-[var(--background-secondary)]",
       )}
       aria-label="Upload images"
@@ -192,7 +213,7 @@ export function UploadBox({
           onClick={openFilePicker}
           className="flex w-full items-center justify-center gap-3 text-left sm:justify-start"
         >
-          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--card)] text-[var(--primary)] shadow-sm">
+          <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-notice)] bg-[var(--card)] text-[var(--primary)]">
             <ImageUp className="h-5 w-5" />
           </div>
           <div>
@@ -208,7 +229,7 @@ export function UploadBox({
         <>
           <div
             className={clsx(
-              "mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--card)] shadow-sm",
+              "mx-auto inline-flex h-14 w-14 items-center justify-center rounded-[var(--radius-notice)] bg-[var(--card)]",
               isRejected ? "text-[var(--danger)]" : "text-[var(--primary)]",
             )}
           >
@@ -228,12 +249,14 @@ export function UploadBox({
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-foreground)]">
             or drop your files here.
           </p>
-          <div className="relative mx-auto mt-5 inline-block text-left">
+          <div ref={menuRef} className="relative mx-auto mt-5 inline-block text-left">
             <button
+              ref={menuTriggerRef}
               type="button"
               onClick={() => setIsMenuOpen((current) => !current)}
               aria-expanded={isMenuOpen}
-              className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#3E5F44] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#2F4A35]"
+              aria-controls="image-source-menu"
+              className="inline-flex items-center justify-center gap-3 rounded-[var(--radius-control)] bg-[#3E5F44] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#2F4A35]"
             >
               <ImageUp className="h-4 w-4" />
               Select images
@@ -246,8 +269,10 @@ export function UploadBox({
             </button>
 
             <div
+              id="image-source-menu"
+              inert={!isMenuOpen}
               className={clsx(
-                "absolute left-1/2 z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-xl border bg-[var(--card)] text-sm shadow-xl transition-all duration-180 ease-out",
+                "absolute left-1/2 z-20 mt-2 w-[min(16rem,calc(100vw-2rem))] -translate-x-1/2 overflow-hidden rounded-[var(--radius-control)] border bg-[var(--card)] text-sm shadow-xl transition-all duration-180 ease-out",
                 isMenuOpen
                   ? "visible translate-y-0 opacity-100"
                   : "pointer-events-none invisible -translate-y-1 opacity-0",
@@ -291,19 +316,20 @@ export function UploadBox({
           </div>
 
           {isUrlFormOpen ? (
-            <div className="mx-auto mt-4 flex max-w-lg flex-col gap-2 rounded-2xl border bg-[var(--card)] p-3 sm:flex-row">
+            <div className="mx-auto mt-4 flex max-w-lg flex-col gap-2 rounded-[var(--radius-notice)] border bg-[var(--card)] p-3 sm:flex-row">
               <input
                 type="url"
                 value={imageUrl}
                 onChange={(event) => setImageUrl(event.target.value)}
+                aria-label="Image URL"
                 placeholder="Paste an image URL"
-                className="min-w-0 flex-1 rounded-xl border bg-[var(--card-muted)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]"
+                className="min-w-0 flex-1 rounded-[var(--radius-control)] border bg-[var(--card-muted)] px-3 py-2 text-sm outline-none focus:border-[var(--primary)]"
               />
               <button
                 type="button"
                 onClick={handleUrlImport}
                 disabled={isImportingUrl}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#3E5F44] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2F4A35] disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] bg-[#3E5F44] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2F4A35] disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isImportingUrl ? (
                   <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -313,7 +339,7 @@ export function UploadBox({
             </div>
           ) : null}
           {dropNotice ? (
-            <p className="mt-3 text-xs font-medium text-[var(--danger)]">
+            <p role="alert" className="mt-3 text-xs font-medium text-[var(--danger)]">
               {dropNotice}
             </p>
           ) : null}

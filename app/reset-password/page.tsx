@@ -50,7 +50,7 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl items-center justify-center px-4 py-10 sm:px-6">
+    <main className="auth-page mx-auto flex min-h-screen max-w-xl items-center justify-center px-4 py-10 sm:px-6">
       <div className="w-full rounded-[1.5rem] border bg-[var(--card)] p-6 shadow-[var(--shadow)] sm:p-8">
         <p className="text-sm font-medium text-[var(--primary)]">Reset password</p>
         <h1 className="mt-2 text-3xl font-semibold text-[var(--foreground)]">
@@ -71,6 +71,7 @@ export default function ResetPasswordPage() {
                 type={showPassword ? "text" : "password"}
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
+                autoComplete="new-password"
                 minLength={12}
                 required
                 placeholder="At least 12 characters"
@@ -97,6 +98,7 @@ export default function ResetPasswordPage() {
                 type={showConfirmPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
+                autoComplete="new-password"
                 minLength={12}
                 required
                 placeholder="Repeat your password"
@@ -124,7 +126,7 @@ export default function ResetPasswordPage() {
           ) : null}
 
           {success ? (
-            <div className="rounded-2xl border border-[var(--primary)]/25 bg-[var(--background-secondary)] px-4 py-3 text-sm text-[var(--foreground)]">
+            <div role="status" className="rounded-2xl border border-[var(--primary)]/25 bg-[var(--background-secondary)] px-4 py-3 text-sm text-[var(--foreground)]">
               {success}
             </div>
           ) : null}

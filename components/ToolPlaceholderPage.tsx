@@ -4,6 +4,8 @@ import { ConverterToolIcon } from "@/components/ConverterToolIcon";
 import { SectionHeading } from "@/components/SectionHeading";
 import { SitePageShell } from "@/components/SitePageShell";
 import { getToolById } from "@/lib/tools/converterTools";
+import styles from "@/components/ConverterLayout.module.css";
+import support from "@/components/ToolSupport.module.css";
 
 type ToolPlaceholderPageProps = {
   toolId: string;
@@ -37,9 +39,10 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
   return (
     <SitePageShell>
       <div className="converter-page" data-tool-kind={tool.section}>
-        <section className="converter-stage relative px-4 pb-14 pt-10 sm:px-6 sm:pb-18 sm:pt-14">
+        <section className={styles.stage}>
           <div className="converter-frame mx-auto max-w-7xl">
-            <div className="converter-shell card-shadow rounded-[1.5rem] border bg-[var(--card)] p-4 sm:p-6 lg:p-7">
+            <div className={styles.layout}>
+              <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-[var(--background-secondary)] px-3 py-2 text-sm font-medium text-[var(--primary)]">
                 <ConverterToolIcon icon={tool.icon} className="h-4 w-4" />
                 Convertiva Tools
@@ -50,8 +53,9 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
               <p className="mt-2 text-sm leading-6 text-[var(--muted-foreground)]">
                 {tool.subtitle}
               </p>
+              </div>
 
-              <div className="mt-7 rounded-[1.5rem] border border-dashed border-[var(--primary-soft)] bg-[var(--card-muted)] p-6 text-center">
+              <div className={styles.placeholder}>
                 <div className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--card)] text-[var(--primary)] shadow-sm">
                   <Clock className="h-6 w-6" />
                 </div>
@@ -63,7 +67,7 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
                 </p>
                 <Link
                   href="/"
-                  className="mt-5 inline-flex items-center justify-center gap-2 rounded-full border bg-[var(--card)] px-4 py-2 text-sm font-semibold text-[var(--primary-dark)] transition hover:border-[var(--primary)] hover:bg-[var(--background-secondary)] dark:text-[var(--foreground)]"
+                  className="button-primary"
                 >
                   <ArrowLeft className="h-4 w-4" />
                   Back to converters
@@ -73,7 +77,7 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
           </div>
         </section>
 
-        <section id="formats" className="soft-section section-fade py-16 sm:py-20">
+        <section id="formats" className={`${support.section} soft-section`}>
           <div className="mx-auto max-w-5xl px-6">
             <SectionHeading
               badge="Formats"
@@ -95,7 +99,7 @@ export function ToolPlaceholderPage({ toolId }: ToolPlaceholderPageProps) {
           </div>
         </section>
 
-        <section id="how-it-works" className="section-fade py-16 sm:py-20">
+        <section id="how-it-works" className={support.section}>
           <div className="mx-auto max-w-7xl px-6">
             <SectionHeading
               badge="How it works"

@@ -1,10 +1,11 @@
+import support from "@/components/ToolSupport.module.css";
 import { Film } from "lucide-react";
 import { SectionHeading } from "@/components/SectionHeading";
 import { videoFormats } from "@/lib/formats/videoFormats";
 
 export function VideoSupportedFormats() {
   return (
-    <section id="formats" className="soft-section section-fade py-16 sm:py-20">
+    <section id="formats" className={`${support.section} soft-section section-fade py-16 sm:py-20`}>
       <div className="mx-auto max-w-5xl px-6">
         <SectionHeading
           badge="Formats"
