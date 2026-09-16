@@ -98,7 +98,10 @@ try {
         await page.getByRole("button", { name: config.selectButtonLabel, exact: true }).click();
         await (await chooser).setFiles(files);
       }
-      if (config.outputFormats?.length) await page.getByLabel("Convert to", { exact: true }).selectOption(config.outputFormats.at(-1).value);
+      if (config.outputFormats?.length) {
+        await page.getByRole("button", { name: "Convert to", exact: true }).click();
+        await page.getByRole("dialog", { name: "Choose output format" }).getByRole("button", { name: config.outputFormats.at(-1).label, exact: true }).click();
+      }
       await action.click(); await requestedPromise;
       assert.equal(await page.getByRole("button", { name: "Working...", exact: true }).isDisabled(), true);
       if (id === "compress-png") await snapshot(`${id}-processing`);

@@ -44,7 +44,7 @@ export function FormatPicker<T extends string>({ categories, value, onChange }: 
     }}>
       <p id={`${id}-label`} className={styles.label}>Convert to</p>
       <button ref={trigger} type="button" aria-labelledby={`${id}-label`} aria-expanded={open} aria-controls={`${id}-panel`} aria-haspopup="dialog" className={styles.trigger} onClick={() => setOpen(!open)}>
-        <span>{value ? value.toUpperCase() : "Choose format"}</span><ChevronDown size={16} aria-hidden="true" />
+        <span>{value ? value.toUpperCase() : "Choose format"}</span><ChevronDown className={styles.chevron} data-open={open} size={16} aria-hidden="true" />
       </button>
       {open ? (
         <div id={`${id}-panel`} role="dialog" aria-label="Choose output format" className={styles.panel}>

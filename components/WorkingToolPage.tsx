@@ -3,6 +3,7 @@
 import styles from "@/components/ConverterLayout.module.css";
 import support from "@/components/ToolSupport.module.css";
 import { ConversionAvailability } from "@/components/ConversionAvailability";
+import { FormatPicker } from "@/components/FormatPicker";
 
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -328,31 +329,27 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
                   {config.maxFiles ? <p className="mb-4 text-xs text-[var(--muted-foreground)]">Up to {config.maxFiles} files per batch</p> : null}
                   <div className="grid gap-3 md:grid-cols-2 md:items-start">
                     <div className="space-y-2">
-                      <p className="text-sm font-semibold text-[var(--foreground)]">
-                        {config.outputFormats?.length ? "Convert to" : config.inputMode === "url" ? "Website" : "Files"}
-                      </p>
                       {config.outputFormats?.length ? (
-                        <label className="block">
-                          <select
-                            aria-label="Convert to"
-                            value={outputFormat}
-                            onChange={(event) => {
-                              resetResultState();
-                              setOutputFormat(event.target.value);
-                            }}
-                            className="min-h-[48px] w-full rounded-2xl border bg-[var(--card)] px-3 py-2.5 text-sm font-semibold text-[var(--foreground)] focus:border-[var(--primary)]"
-                          >
-                            {config.outputFormats.map((format) => (
-                              <option key={format.value} value={format.value}>
-                                {format.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
+                        <FormatPicker
+                          value={outputFormat}
+                          categories={[{
+                            label: "Common",
+                            formats: config.outputFormats.map((format) => format.value),
+                          }]}
+                          onChange={(nextFormat) => {
+                            resetResultState();
+                            setOutputFormat(nextFormat);
+                          }}
+                        />
                       ) : (
-                        <p className="text-sm leading-6 text-[var(--muted-foreground)]">
-                          {config.idleHelperText}
-                        </p>
+                        <>
+                          <p className="text-sm font-semibold text-[var(--foreground)]">
+                            {config.inputMode === "url" ? "Website" : "Files"}
+                          </p>
+                          <p className="text-sm leading-6 text-[var(--muted-foreground)]">
+                            {config.idleHelperText}
+                          </p>
+                        </>
                       )}
                       {config.outputFormats?.length ? (
                         <p className="text-sm leading-6 text-[var(--muted-foreground)]">
