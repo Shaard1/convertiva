@@ -25,7 +25,7 @@ import { formatFileSize } from "@/lib/format";
 import { getToolById } from "@/lib/tools/converterTools";
 import { workingToolConfigs } from "@/lib/tools/workingToolConfigs";
 import {
-  incrementAuthenticatedUsage,
+  getAuthenticatedUsage,
   incrementGuestUsage,
 } from "@/lib/usage";
 
@@ -105,9 +105,11 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
     selectFiles(Array.from(event.dataTransfer.files));
   }
 
-  async function updateUsageAfterSuccess() {
+  async function refreshUsageAfterSuccess() {
     if (user) {
-      setUsage(await incrementAuthenticatedUsage(user, 1));
+      // Usage rows are server-managed and intentionally read-only under RLS.
+      // A refresh must never hide a completed conversion result.
+      setUsage(await getAuthenticatedUsage(user));
       return;
     }
 
@@ -184,7 +186,6 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
     );
     const downloadUrl = URL.createObjectURL(blob);
 
-    await updateUsageAfterSuccess();
     setStatus("success");
     setMessage("Your file is ready.");
     setResult({
@@ -192,6 +193,15 @@ export function WorkingToolPage({ toolId }: WorkingToolPageProps) {
       fileSize: blob.size,
       downloadUrl,
     });
+
+    try {
+      await refreshUsageAfterSuccess();
+    } catch (error) {
+      console.warn(
+        "Conversion completed, but usage could not be refreshed.",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
   }
 
   function clearSelection() {

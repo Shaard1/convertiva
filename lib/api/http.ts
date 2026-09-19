@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { activateDevelopmentServiceFallback } from "@/lib/development-service-fallback";
 import { getSupabaseAdminClient } from "@/lib/supabase-server";
 
@@ -27,6 +28,12 @@ const MAX_TRACKED_CLIENTS = 10_000;
 type RateLimitRecord = {
   count: number;
   expiresAt: number;
+};
+
+type DistributedRateLimitRow = {
+  expires_at: string;
+  request_count: number;
+  window_started_at: string;
 };
 
 const requestRateLimits = new Map<string, RateLimitRecord>();
@@ -90,14 +97,31 @@ export function assertTrustedBrowserOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return;
 
-  let expectedOrigin: string;
+  let requestUrl: URL;
   try {
-    expectedOrigin = new URL(request.url).origin;
+    requestUrl = new URL(request.url);
   } catch {
     throw new PublicApiError("INVALID_REQUEST_URL", "The request URL is invalid.", 400);
   }
 
-  if (origin === "null" || origin !== expectedOrigin) {
+  const trustedOrigins = new Set([requestUrl.origin]);
+  const host = request.headers.get("host")?.trim();
+
+  if (host) {
+    const forwardedProtocol = request.headers
+      .get("x-forwarded-proto")
+      ?.split(",")[0]
+      ?.trim();
+    const protocol = forwardedProtocol || requestUrl.protocol.slice(0, -1);
+
+    try {
+      trustedOrigins.add(new URL(`${protocol}://${host}`).origin);
+    } catch {
+      throw new PublicApiError("INVALID_REQUEST_HOST", "The request host is invalid.", 400);
+    }
+  }
+
+  if (origin === "null" || !trustedOrigins.has(origin)) {
     throw new PublicApiError("CROSS_SITE_REQUEST_BLOCKED", "Cross-site requests are not allowed.", 403);
   }
 }
@@ -110,6 +134,122 @@ function getDistributedRateLimitKey(request: Request, scope: string) {
     : createHash("sha256").update(value).digest("hex");
 }
 
+function getRetryAfterSeconds(expiresAt: string, fallback = 60) {
+  const expiresAtMs = new Date(expiresAt).getTime();
+
+  return Number.isFinite(expiresAtMs)
+    ? Math.max(1, Math.ceil((expiresAtMs - Date.now()) / 1_000))
+    : fallback;
+}
+
+function isUniqueViolation(error: { code?: string } | null) {
+  return error?.code === "23505";
+}
+
+async function enforceTableBackedRateLimit(
+  supabase: SupabaseClient,
+  limitKey: string,
+  maximumRequests: number,
+  windowSeconds: number,
+) {
+  const maximumAttempts = 4;
+
+  for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
+    const { data, error } = await supabase
+      .from("public_request_rate_limits")
+      .select("window_started_at, request_count, expires_at")
+      .eq("limit_key", limitKey)
+      .abortSignal(AbortSignal.timeout(DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS))
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    const current = data as DistributedRateLimitRow | null;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + windowSeconds * 1_000);
+
+    if (!current) {
+      const { error: insertError } = await supabase
+        .from("public_request_rate_limits")
+        .insert({
+          limit_key: limitKey,
+          window_started_at: now.toISOString(),
+          request_count: 1,
+          expires_at: expiresAt.toISOString(),
+        })
+        .abortSignal(AbortSignal.timeout(DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS));
+
+      if (!insertError) {
+        return;
+      }
+
+      if (isUniqueViolation(insertError)) {
+        continue;
+      }
+
+      throw insertError;
+    }
+
+    if (new Date(current.expires_at).getTime() <= now.getTime()) {
+      const { data: resetRow, error: resetError } = await supabase
+        .from("public_request_rate_limits")
+        .update({
+          window_started_at: now.toISOString(),
+          request_count: 1,
+          expires_at: expiresAt.toISOString(),
+        })
+        .eq("limit_key", limitKey)
+        .eq("expires_at", current.expires_at)
+        .select("limit_key")
+        .abortSignal(AbortSignal.timeout(DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS))
+        .maybeSingle();
+
+      if (resetError) {
+        throw resetError;
+      }
+
+      if (resetRow) {
+        return;
+      }
+
+      continue;
+    }
+
+    if (current.request_count >= maximumRequests) {
+      throw new PublicApiError(
+        "RATE_LIMIT_EXCEEDED",
+        "Too many requests. Try again shortly.",
+        429,
+        getRetryAfterSeconds(current.expires_at),
+      );
+    }
+
+    const { data: updatedRow, error: updateError } = await supabase
+      .from("public_request_rate_limits")
+      .update({ request_count: current.request_count + 1 })
+      .eq("limit_key", limitKey)
+      .eq("request_count", current.request_count)
+      .eq("expires_at", current.expires_at)
+      .select("limit_key")
+      .abortSignal(AbortSignal.timeout(DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS))
+      .maybeSingle();
+
+    if (updateError) {
+      throw updateError;
+    }
+
+    if (updatedRow) {
+      return;
+    }
+  }
+
+  throw new Error(
+    "The table-backed request rate limiter could not resolve a concurrent update.",
+  );
+}
+
 export async function enforceRequestRateLimit(
   request: Request,
   scope: string,
@@ -119,12 +259,15 @@ export async function enforceRequestRateLimit(
   const supabase = getSupabaseAdminClient();
 
   if (supabase) {
+    const limitKey = getDistributedRateLimitKey(request, scope);
+    const windowSeconds = Math.max(1, Math.ceil(windowMs / 1000));
+
     try {
       const { data, error } = await supabase
         .rpc("check_public_request_rate_limit", {
-          p_limit_key: getDistributedRateLimitKey(request, scope),
+          p_limit_key: limitKey,
           p_maximum_requests: maximumRequests,
-          p_window_seconds: Math.max(1, Math.ceil(windowMs / 1000)),
+          p_window_seconds: windowSeconds,
         })
         .abortSignal(AbortSignal.timeout(DISTRIBUTED_RATE_LIMIT_TIMEOUT_MS));
       const result = Array.isArray(data) ? data[0] as { allowed?: unknown; retry_after_seconds?: unknown } | undefined : undefined;
@@ -146,15 +289,29 @@ export async function enforceRequestRateLimit(
         throw error;
       }
 
-      if (process.env.NODE_ENV === "production") {
-        throw new PublicApiError("RATE_LIMIT_SERVICE_UNAVAILABLE", "Request validation is temporarily unavailable.", 503);
-      }
+      try {
+        await enforceTableBackedRateLimit(
+          supabase,
+          limitKey,
+          maximumRequests,
+          windowSeconds,
+        );
+        return;
+      } catch (fallbackError) {
+        if (fallbackError instanceof PublicApiError) {
+          throw fallbackError;
+        }
 
-      activateDevelopmentServiceFallback();
+        if (process.env.NODE_ENV === "production") {
+          throw new PublicApiError("RATE_LIMIT_SERVICE_UNAVAILABLE", "Request validation is temporarily unavailable.", 503);
+        }
 
-      if (!hasWarnedAboutLocalRateLimitFallback) {
-        hasWarnedAboutLocalRateLimitFallback = true;
-        console.warn("Distributed request validation is unavailable; using the development-only in-memory rate limiter.");
+        activateDevelopmentServiceFallback();
+
+        if (!hasWarnedAboutLocalRateLimitFallback) {
+          hasWarnedAboutLocalRateLimitFallback = true;
+          console.warn("Distributed request validation is unavailable; using the development-only in-memory rate limiter.");
+        }
       }
     }
   }

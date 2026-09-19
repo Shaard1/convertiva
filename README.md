@@ -257,7 +257,7 @@ Production authentication requirements:
 
 - In Supabase Auth settings, require passwords of at least 12 characters, enable leaked-password protection and email verification, and restrict redirect URLs to the production origin.
 - Enable MFA for privileged/operator accounts. These policies are enforced by Supabase and cannot be securely replaced by client-side validation.
-- Run the complete `supabase/setup.sql` after every security schema update. Production API routes fail closed when the distributed rate-limit function is unavailable.
+- Run the complete `supabase/setup.sql` after every security schema update. Production API routes prefer the atomic rate-limit function, fall back to guarded optimistic updates on `public_request_rate_limits`, and fail closed only when both database paths are unavailable.
 
 ## Scheduled cleanup on Vercel
 

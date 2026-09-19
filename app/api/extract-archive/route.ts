@@ -23,22 +23,39 @@ async function readEntryBounded(
   entry: JSZip.JSZipObject,
   remainingBytes: number,
 ) {
-  const stream = entry.nodeStream("nodebuffer");
-  const chunks: Buffer[] = [];
-  let totalBytes = 0;
+  return new Promise<Buffer>((resolve, reject) => {
+    const stream = entry.nodeStream("nodebuffer");
+    const chunks: Buffer[] = [];
+    let totalBytes = 0;
+    let isSettled = false;
 
-  for await (const chunk of stream) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    totalBytes += buffer.byteLength;
+    stream.on("data", (chunk: Buffer | Uint8Array) => {
+      if (isSettled) return;
 
-    if (totalBytes > remainingBytes) {
-      throw new Error("The extracted archive exceeds the allowed size.");
-    }
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += buffer.byteLength;
 
-    chunks.push(buffer);
-  }
+      if (totalBytes > remainingBytes) {
+        isSettled = true;
+        stream.pause();
+        reject(new Error("The extracted archive exceeds the allowed size."));
+        return;
+      }
 
-  return Buffer.concat(chunks, totalBytes);
+      chunks.push(buffer);
+    });
+    stream.on("error", (error: Error) => {
+      if (isSettled) return;
+      isSettled = true;
+      reject(error);
+    });
+    stream.on("end", () => {
+      if (isSettled) return;
+      isSettled = true;
+      resolve(Buffer.concat(chunks, totalBytes));
+    });
+    stream.resume();
+  });
 }
 
 export async function POST(request: Request) {
