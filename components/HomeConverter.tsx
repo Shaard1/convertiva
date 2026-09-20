@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, ArrowUpRight, AudioLines, ChevronDown, FileImage, FileText, Film, ImageIcon, LoaderCircle, Plus } from "lucide-react";
+import { ArrowRight, ArrowUpRight, AudioLines, Check, ChevronDown, FileImage, FileText, Film, ImageIcon, LoaderCircle, Plus } from "lucide-react";
 import { CONVERSION_POLICIES, SUPPORTED_INPUT_ACCEPT, SUPPORTED_OUTPUT_FORMATS } from "@/lib/constants";
 import { validateFile } from "@/lib/file";
 import { stageImageUpload } from "@/lib/pending-image-upload";
@@ -21,6 +21,163 @@ const outputDescriptions: Record<OutputFormat, string> = {
   tiff: "Detailed images for print workflows.",
   webp: "Smaller images, made for the web.",
 };
+
+type HomeFormatMenuProps = {
+  disabled: boolean;
+  onChange: (format: OutputFormat) => void;
+  value: OutputFormat;
+};
+
+function HomeFormatMenu({ disabled, onChange, value }: HomeFormatMenuProps) {
+  const labelId = useId();
+  const listboxId = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const optionRefs = useRef<Array<HTMLLIElement | null>>([]);
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(() =>
+    SUPPORTED_OUTPUT_FORMATS.indexOf(value),
+  );
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen]);
+
+  function focusOption(index: number) {
+    const nextIndex = Math.max(0, Math.min(index, SUPPORTED_OUTPUT_FORMATS.length - 1));
+    setActiveIndex(nextIndex);
+    optionRefs.current[nextIndex]?.focus();
+  }
+
+  function openMenu(preferredIndex = SUPPORTED_OUTPUT_FORMATS.indexOf(value)) {
+    setActiveIndex(preferredIndex);
+    setIsOpen(true);
+    requestAnimationFrame(() => optionRefs.current[preferredIndex]?.focus());
+  }
+
+  function closeMenu({ restoreFocus = false } = {}) {
+    setIsOpen(false);
+    if (restoreFocus) requestAnimationFrame(() => triggerRef.current?.focus());
+  }
+
+  function selectFormat(format: OutputFormat) {
+    onChange(format);
+    closeMenu({ restoreFocus: true });
+  }
+
+  function handleListboxKeyDown(event: React.KeyboardEvent<HTMLUListElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeMenu({ restoreFocus: true });
+      return;
+    }
+
+    if (event.key === "Tab") {
+      setIsOpen(false);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectFormat(SUPPORTED_OUTPUT_FORMATS[activeIndex]);
+      return;
+    }
+
+    const nextIndex = event.key === "ArrowDown"
+      ? (activeIndex + 1) % SUPPORTED_OUTPUT_FORMATS.length
+      : event.key === "ArrowUp"
+        ? (activeIndex - 1 + SUPPORTED_OUTPUT_FORMATS.length) % SUPPORTED_OUTPUT_FORMATS.length
+        : event.key === "Home"
+          ? 0
+          : event.key === "End"
+            ? SUPPORTED_OUTPUT_FORMATS.length - 1
+            : null;
+
+    if (nextIndex !== null) {
+      event.preventDefault();
+      focusOption(nextIndex);
+      return;
+    }
+
+    if (event.key.length === 1 && /[a-z]/i.test(event.key)) {
+      const query = event.key.toLowerCase();
+      const matchingIndex = SUPPORTED_OUTPUT_FORMATS.findIndex((format, index) =>
+        index !== activeIndex && format.startsWith(query),
+      );
+      if (matchingIndex >= 0) {
+        event.preventDefault();
+        focusOption(matchingIndex);
+      }
+    }
+  }
+
+  return (
+    <div ref={rootRef} className={styles.formatMenuRoot} onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setIsOpen(false);
+    }}>
+      <span id={labelId} className={styles.formatLabel}>CONVERT TO</span>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={styles.formatTrigger}
+        aria-labelledby={`${labelId} ${labelId}-value`}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? listboxId : undefined}
+        disabled={disabled}
+        onClick={() => isOpen ? closeMenu() : openMenu()}
+        onKeyDown={(event) => {
+          if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+            event.preventDefault();
+            const preferredIndex = event.key === "Home"
+              ? 0
+              : event.key === "End"
+                ? SUPPORTED_OUTPUT_FORMATS.length - 1
+                : SUPPORTED_OUTPUT_FORMATS.indexOf(value);
+            openMenu(preferredIndex);
+          }
+        }}
+      >
+        <span id={`${labelId}-value`}>{value.toUpperCase()}</span>
+        <ChevronDown className={styles.formatChevron} data-open={isOpen} size={18} aria-hidden="true" />
+      </button>
+      {isOpen ? (
+        <ul
+          id={listboxId}
+          role="listbox"
+          aria-labelledby={labelId}
+          className={styles.formatMenu}
+          onKeyDown={handleListboxKeyDown}
+        >
+          {SUPPORTED_OUTPUT_FORMATS.map((format, index) => (
+            <li
+              key={format}
+              ref={(element) => { optionRefs.current[index] = element; }}
+              role="option"
+              aria-selected={format === value}
+              tabIndex={index === activeIndex ? 0 : -1}
+              className={styles.formatOption}
+              data-active={index === activeIndex}
+              onFocus={() => setActiveIndex(index)}
+              onPointerMove={() => setActiveIndex(index)}
+              onClick={() => selectFormat(format)}
+            >
+              <span>{format.toUpperCase()}</span>
+              {format === value ? <Check size={15} strokeWidth={2.25} aria-hidden="true" /> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
 
 export function HomeConverter() {
   const router = useRouter();
@@ -83,12 +240,7 @@ export function HomeConverter() {
         </div>
         <aside className={styles.outputPanel} aria-label="Image conversion settings">
           <div>
-            <label htmlFor="home-output-format">CONVERT TO</label>
-            <div className={styles.selectWrap}>
-              <select id="home-output-format" value={outputFormat} disabled={isPending} onChange={(event) => setOutputFormat(event.target.value as OutputFormat)}>
-                {SUPPORTED_OUTPUT_FORMATS.map((format) => <option key={format} value={format}>{format.toUpperCase()}</option>)}
-              </select><ChevronDown size={18} aria-hidden="true" />
-            </div>
+            <HomeFormatMenu value={outputFormat} disabled={isPending} onChange={setOutputFormat} />
             <p className={styles.outputDescription}>{outputDescriptions[outputFormat]}</p>
           </div>
           <div className={styles.instructions}>

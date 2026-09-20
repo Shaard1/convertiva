@@ -41,10 +41,21 @@
 .chooseButton:disabled { cursor: wait; opacity: .75; }
 .dropzone p.uploadHint { margin-top: 10px; font-size: 11px; }
 .outputPanel { display: flex; flex-direction: column; padding: 8px 5px 4px 0; }
-.outputPanel label, .instructions > p { display: block; font-size: 10px; font-weight: 600; letter-spacing: .13em; }
-.selectWrap { position: relative; margin-top: 12px; }
-.selectWrap select { width: 100%; appearance: none; min-height: 51px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); padding: 10px 38px 10px 14px; font-size: 17px; font-weight: 600; color: var(--foreground); cursor: pointer; }
-.selectWrap > svg { pointer-events: none; position: absolute; right: 13px; top: 17px; }
+.formatLabel, .instructions > p { display: block; font-size: 10px; font-weight: 600; letter-spacing: .13em; }
+.formatMenuRoot { position: relative; margin-top: 12px; }
+.formatLabel { position: absolute; inset: -24px auto auto 0; }
+.formatTrigger { display: flex; width: 100%; min-height: 51px; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border); border-radius: 5px; background: var(--card); padding: 10px 13px 10px 14px; color: var(--foreground); font-size: 17px; font-weight: 600; cursor: pointer; transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease; }
+.formatTrigger:hover, .formatTrigger[aria-expanded="true"] { border-color: var(--primary); background: var(--card-muted); }
+.formatTrigger[aria-expanded="true"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent); }
+.formatTrigger:disabled { cursor: wait; opacity: .7; }
+.formatChevron { flex: none; color: var(--muted-foreground); transition: transform 180ms ease, color 150ms ease; }
+.formatChevron[data-open="true"] { color: var(--primary); transform: rotate(180deg); }
+.formatMenu { position: absolute; z-index: 20; top: calc(100% + 7px); right: 0; display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin: 0; padding: 7px; border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border)); border-radius: 8px; background: color-mix(in srgb, var(--card) 96%, transparent); box-shadow: 0 14px 32px #15221d20, 0 3px 8px #15221d12; list-style: none; backdrop-filter: blur(12px); transform-origin: top right; animation: format-menu-enter 160ms cubic-bezier(.2, .8, .2, 1) both; }
+.formatOption { display: flex; min-height: 40px; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid transparent; border-radius: 5px; color: var(--muted-foreground); font-size: 13px; font-weight: 600; cursor: pointer; outline: none; transition: background-color 130ms ease, border-color 130ms ease, color 130ms ease, transform 130ms ease; }
+.formatOption:hover, .formatOption[data-active="true"] { border-color: var(--border); background: var(--background-secondary); color: var(--foreground); transform: translateY(-1px); }
+.formatOption[aria-selected="true"] { border-color: color-mix(in srgb, var(--primary) 42%, var(--border)); background: var(--accent-soft); color: var(--foreground); }
+.formatOption:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.formatOption svg { flex: none; color: var(--primary-dark); }
 .outputDescription { min-height: 38px; margin-top: 10px; font-size: 12px; line-height: 1.6; color: var(--muted-foreground); }
 .instructions { margin-top: 25px; padding-top: 20px; border-top: 1px solid var(--border); }
 .instructions > p { color: var(--muted-foreground); font-size: 9px; }
@@ -79,6 +90,7 @@
 .directoryFoot a { display: flex; align-items: center; gap: 8px; color: var(--foreground); text-decoration: underline; text-underline-offset: 4px; }
 .spinner { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes format-menu-enter { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
 @media (max-width: 60em) {
   .content { padding-inline: 24px; }
@@ -104,6 +116,7 @@
   .dropzone { min-height: 317px; padding-inline: 12px; }
   .dropzone h2 { font-size: 21px; }
   .outputPanel { display: grid; grid-template-columns: 1fr; padding: 0 3px; }
+  .formatMenu { position: static; margin-top: 7px; }
   .outputDescription { min-height: 0; }
   .instructions { display: none; }
   .localNote { max-width: none; padding-top: 12px; }

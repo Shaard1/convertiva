@@ -68,15 +68,27 @@ try {
       await closeMenu.click();
     }
 
-    // Native select updates both its value and the conversion illustration.
-    await page.getByLabel("CONVERT TO", { exact: true }).selectOption("png");
+    // Custom format menu updates the illustration and supports full keyboard control.
+    const formatMenu = page.getByRole("button", { name: /CONVERT TO/i });
+    await formatMenu.click();
+    assert.equal(await formatMenu.getAttribute("aria-expanded"), "true");
+    await page.getByRole("listbox", { name: "CONVERT TO", exact: true }).waitFor();
+    await page.getByRole("option", { name: "PNG", exact: true }).click();
+    assert.equal(await formatMenu.getAttribute("aria-expanded"), "false");
     assert.match(await page.locator("#image-upload").textContent(), /\.png/);
-    await page.getByLabel("CONVERT TO", { exact: true }).selectOption("webp");
-    await page.getByLabel("CONVERT TO", { exact: true }).focus();
+    await formatMenu.click();
+    await page.getByRole("option", { name: "WEBP", exact: true }).click();
+    await formatMenu.focus();
+    await page.keyboard.press("Enter");
     await page.keyboard.press("Home");
     await page.keyboard.press("Enter");
-    assert.equal(await page.getByLabel("CONVERT TO", { exact: true }).inputValue(), "avif");
-    await page.getByLabel("CONVERT TO", { exact: true }).selectOption("webp");
+    assert.match(await formatMenu.textContent(), /AVIF/);
+    await formatMenu.click();
+    await page.getByRole("option", { name: "WEBP", exact: true }).click();
+    await formatMenu.click();
+    await page.keyboard.press("Escape");
+    assert.equal(await formatMenu.getAttribute("aria-expanded"), "false");
+    assert.equal(await formatMenu.evaluate((element) => element === document.activeElement), true);
     await page.locator('input[type="file"]').setInputFiles({ name: "invalid.txt", mimeType: "text/plain", buffer: Buffer.from("test") });
     await page.getByRole("alert").filter({ hasText: "Unsupported file type" }).waitFor();
     assert.equal(new URL(page.url()).pathname, "/");
