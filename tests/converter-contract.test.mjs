@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const constantsSource = await readFile("lib/constants.ts", "utf8");
+const nextConfigSource = await readFile("next.config.ts", "utf8");
 const routeSource = await readFile("app/api/convert/route.ts", "utf8");
 const routeUtilsSource = await readFile("lib/tools/routeUtils.ts", "utf8");
 const componentSource = await readFile("components/ConverterCard.tsx", "utf8");
@@ -101,6 +102,13 @@ test("legacy tool APIs share overload protection and request correlation", () =>
   for (const source of legacyToolRouteSources) {
     assert.match(source, /handleToolRequest/);
   }
+});
+
+test("website render routes include the serverless Chromium runtime files", () => {
+  assert.match(nextConfigSource, /outputFileTracingIncludes/);
+  assert.match(nextConfigSource, /\/api\/website-screenshot/);
+  assert.match(nextConfigSource, /\/api\/website-to-pdf/);
+  assert.match(nextConfigSource, /@sparticuz\/chromium\/bin\/\*\*\/\*/);
 });
 
 test("conversion API returns binary downloads instead of base64 JSON payloads", () => {

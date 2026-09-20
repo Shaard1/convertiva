@@ -80,8 +80,15 @@ export async function POST(request: Request) {
               "image/png",
             ),
           });
-        } catch {
-          console.error("Website screenshot failed", { event: "browser_capture_failed" });
+        } catch (error) {
+          console.error(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            level: "error",
+            service: "convertiva-tools",
+            event: "browser_capture_failed",
+            error_name: error instanceof Error ? error.name : "UnknownError",
+            internal_error: error instanceof Error ? error.message : "Unknown error",
+          }));
 
           return buildToolErrorResponse(
             "The website could not be captured. Try another public URL.",

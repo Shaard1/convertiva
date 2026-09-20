@@ -83,8 +83,15 @@ export async function POST(request: Request) {
           return new Response(new Uint8Array(pdf), {
             headers: createDownloadHeaders("website.pdf", "application/pdf"),
           });
-        } catch {
-          console.error("Website PDF export failed", { event: "browser_pdf_failed" });
+        } catch (error) {
+          console.error(JSON.stringify({
+            timestamp: new Date().toISOString(),
+            level: "error",
+            service: "convertiva-tools",
+            event: "browser_pdf_failed",
+            error_name: error instanceof Error ? error.name : "UnknownError",
+            internal_error: error instanceof Error ? error.message : "Unknown error",
+          }));
 
           return buildToolErrorResponse(
             "The website could not be exported as a PDF. Try another public URL.",

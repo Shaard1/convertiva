@@ -3,6 +3,14 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["@sparticuz/chromium"],
+  outputFileTracingIncludes: {
+    "/api/website-screenshot": [
+      "./node_modules/@sparticuz/chromium/bin/**/*",
+    ],
+    "/api/website-to-pdf": [
+      "./node_modules/@sparticuz/chromium/bin/**/*",
+    ],
+  },
   typedRoutes: true,
   async headers() {
     return [
