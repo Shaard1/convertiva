@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowUpRight, ShieldCheck } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { APP_NAME } from "@/lib/constants";
 
 type FooterLink = {
@@ -39,7 +39,6 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-6 py-10 sm:py-12">
         <div className="footer-cta mb-14 grid gap-7 rounded-[1.75rem] border p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
-            <p className="eyebrow"><ShieldCheck className="h-4 w-4" /> Private, temporary processing</p>
             <h2 className="mt-4 max-w-xl text-3xl font-semibold tracking-[-0.045em] sm:text-4xl">Your next file is a few clicks from finished.</h2>
           </div>
           <Link href="/tools/image-converter" prefetch={false} className="button-primary w-fit">Open a converter <ArrowUpRight className="h-4 w-4" /></Link>
